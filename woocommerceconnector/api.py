@@ -16,10 +16,10 @@ from frappe.utils.background_jobs import enqueue
 def check_hourly_sync():
     woocommerce_settings = frappe.get_doc("WooCommerce Config")
     if woocommerce_settings.hourly_sync == 1:
-        sync_woocommerce()
+        sync_woocommerce(sync_order=True, sync_prods=False, sync_stock=False)
 
 @frappe.whitelist()
-def sync_woocommerce():
+def sync_woocommerce(sync_order=False, sync_prods = False, sync_stock=False):
     """Enqueue longjob for syncing woocommerce"""
     woocommerce_settings = frappe.get_doc("WooCommerce Config")
     if woocommerce_settings.sync_timeout == 0:
@@ -29,11 +29,15 @@ def sync_woocommerce():
     # apply minimal timeout of 60 sec
     if timeout < 60:
         timeout = 60
-    enqueue("woocommerceconnector.api.sync_woocommerce_resources", queue='long', timeout=timeout)
+    enqueue("woocommerceconnector.api.sync_woocommerce_resources", queue='long',
+             timeout=timeout, 
+             sync_prods=sync_prods,
+             sync_order=sync_order,
+             sync_stock=sync_stock)
     frappe.msgprint(_("Queued for syncing. It may take a few minutes to an hour if this is your first sync."))
 
 @frappe.whitelist()
-def sync_woocommerce_resources():
+def sync_woocommerce_resources(sync_prods, sync_order, sync_stock):
     woocommerce_settings = frappe.get_doc("WooCommerce Config")
 
     make_woocommerce_log(title="Sync Job Queued", status="Queued", method=frappe.local.form_dict.cmd, message="Sync Job Queued")
@@ -42,20 +46,29 @@ def sync_woocommerce_resources():
         make_woocommerce_log(title="Sync Job Started", status="Started", method=frappe.local.form_dict.cmd, message="Sync Job Started")
         try :
             validate_woocommerce_settings(woocommerce_settings)
-            sync_start_time = frappe.utils.now()
             frappe.local.form_dict.count_dict = {}
             frappe.local.form_dict.count_dict["customers"] = 0
-            frappe.local.form_dict.count_dict["products"] = 0
             frappe.local.form_dict.count_dict["orders"] = 0
-            sync_products(woocommerce_settings.price_list, woocommerce_settings.warehouse, True if woocommerce_settings.sync_items_from_woocommerce_to_erp == 1 else False)
-            sync_customers()
-            sync_orders()
-            # close_synced_woocommerce_orders() # DO NOT GLOBALLY CLOSE
-            if woocommerce_settings.sync_item_qty_from_erpnext_to_woocommerce:
-                update_item_stock_qty()
-            frappe.db.set_value("WooCommerce Config", None, "last_sync_datetime", sync_start_time)
+            frappe.local.form_dict.count_dict["products"] = 0                
+            
+            frappe.db.set_value("WooCommerce Config", None, "last_sync_datetime", frappe.utils.now())
+            message = ""
+            if sync_prods:
+                sync_products(woocommerce_settings.price_list)
+                message += "Updated {products} item(s)".format(**frappe.local.form_dict.count_dict)
+            if sync_order:
+                sync_customers()
+                sync_orders()
+                message += """ Updated {customers} customer(s), {orders} order(s)""".format(
+                    **frappe.local.form_dict.count_dict)
+            if sync_stock:
+                # close_synced_woocommerce_orders() # DO NOT GLOBALLY CLOSE
+                if woocommerce_settings.sync_item_qty_from_erpnext_to_woocommerce:
+                    update_item_stock_qty()
+                message += " Updated {products} item(s) stock".format(**frappe.local.form_dict.count_dict)
+
             make_woocommerce_log(title="Sync Completed", status="Success", method=frappe.local.form_dict.cmd, 
-                message= "Updated {customers} customer(s), {products} item(s), {orders} order(s)".format(**frappe.local.form_dict.count_dict))
+                message= message)
 
         except Exception as e:
             if e.args[0] and hasattr(e.args[0], "startswith") and e.args[0].startswith("402"):
@@ -97,12 +110,31 @@ def get_log_status():
             message = _("Last sync request is queued")
             alert_class = "alert-warning"
         elif log[0].status=="Error":
-            message = _("Last sync request was failed, check <a href='../desk#Form/woocommerce Log/{0}'> here</a>"
+            message = _("Last sync request was failed, check <a href='../woocommerce-log/{0}'> here</a>"
                 .format(log[0].name))
             alert_class = "alert-danger"
         else:
             message = _("Last sync request was successful")
             alert_class = "alert-success"
+            
+        return {
+            "text": message,
+            "alert_class": alert_class
+        }
+
+@frappe.whitelist()
+def get_log_image_status():
+    # log = frappe.db.sql("""select name, status from `tabwoocommerce Log` 
+    #     order by modified desc limit 1""", as_dict=1)
+    log = frappe.get_all("WooCommerce Missing Images", 
+        fields=['parent'],
+        order_by='modified desc',
+        limit=1)
+    # frappe.throw(str(log))
+    if log:
+        message = _("Some Items Missing Images in WordPress, check <a href='../woocommerce-log/{0}'> here</a>"
+            .format(log[0].parent))
+        alert_class = "alert-danger"
             
         return {
             "text": message,
