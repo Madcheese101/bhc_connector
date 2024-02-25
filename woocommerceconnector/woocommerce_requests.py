@@ -3,11 +3,11 @@ import frappe
 from frappe import _
 import json, math, time, pytz
 from .exceptions import woocommerceError
-from frappe.utils import get_request_session, get_datetime, get_time_zone
+from frappe.utils import get_request_session, get_datetime, get_time_zone,cint
 from woocommerce import API
 from .utils import make_woocommerce_log
 import requests
-from frappe.utils import cint
+from  wordpress import API as WAPI
 
 _per_page=100
 
@@ -27,6 +27,7 @@ def get_woocommerce_settings():
     
     if d.woocommerce_url:
         d.api_secret = d.get_password(fieldname='api_secret')
+        d.wp_app_pass = d.get_password(fieldname='wp_app_pass')
         return d.as_dict()
     
     else:
@@ -62,10 +63,68 @@ def get_request_request(path, settings=None):
                 request_data="not defined", 
                 exception=True)
         return r
-    
+
+def get_request_wordpress(path, settings=None):
+        if not settings:
+                settings = get_woocommerce_settings()
+        
+        wpapi = WAPI(
+                url=settings['woocommerce_url'],
+                api="wp-json",
+                version='wp/v2',
+                consumer_key="",
+                consumer_secret="",
+                wp_user=settings['wp_user'],
+                wp_pass=settings['wp_app_pass'],
+                basic_auth = True,
+                user_auth = True,
+            )
+        r = wpapi.get(path)
+        
+        #r.raise_for_status()
+        # manually raise for status to get more info from error (message details)
+        if r.status_code != requests.codes.ok:
+            make_woocommerce_log(title="WooCommerce get error {0}".format(r.status_code), 
+                status="Error", 
+                method="get_request", 
+                message="{0}: {1}".format(r.url, r.json()),
+                request_data="not defined", 
+                exception=True)
+        return r
+  
 def get_request(path, settings=None):
     return get_request_request(path, settings).json()
+
+def get_filter_request(path, params):
+    settings = get_woocommerce_settings()
+
+    if cint(settings['verify_ssl']) == 1:
+        verify_ssl = True
+    else:
+        verify_ssl = False
         
+    wcapi = API(
+            url=settings['woocommerce_url'],
+            consumer_key=settings['api_key'],
+            consumer_secret=settings['api_secret'],
+            verify_ssl=verify_ssl,
+            wp_api=True,
+            version="wc/v3",
+            timeout=1000
+    )
+    r = wcapi.get(path, params=params)
+    
+    #r.raise_for_status()
+    # manually raise for status to get more info from error (message details)
+    if r.status_code != requests.codes.ok:
+        make_woocommerce_log(title="WooCommerce get error {0}".format(r.status_code), 
+            status="Error", 
+            method="get_request", 
+            message="{0}: {1}".format(r.url, r.json()),
+            request_data="not defined", 
+            exception=True)
+    return r.json()
+
 def post_request(path, data):
         settings = get_woocommerce_settings()
         
@@ -83,7 +142,8 @@ def post_request(path, data):
         
         #r.raise_for_status()
         # manually raise for status to get more info from error (message details)
-        if r.status_code != requests.codes.ok:
+        
+        if r.status_code not in [200,201]:
             make_woocommerce_log(title="WooCommerce post error {0}".format(r.status_code), 
                 status="Error", 
                 method="post_request", 
@@ -92,6 +152,7 @@ def post_request(path, data):
                 exception=True)
         return r.json()
 
+# update entry
 def put_request(path, data):
         settings = get_woocommerce_settings()
         
@@ -121,7 +182,7 @@ def put_request(path, data):
 
 def delete_request(path):
         s = get_request_session()
-
+        settings = get_woocommerce_settings()
         wcapi = API(
                 url=settings['woocommerce_url'],
                 consumer_key=settings['api_key'],
@@ -172,11 +233,35 @@ def get_woocommerce_items(ignore_filter_conditions=False):
         if cint(frappe.get_value("WooCommerce Config", "WooCommerce Config", "sync_only_published")) == 1:
             filter_condition += "&status=publish"
 
-    response = get_request_request('products?per_page={0}&{1}'.format(_per_page,filter_condition) )
+    response = get_request_request('products?per_page={0}&_fields=id,name&{1}'.format(_per_page,filter_condition) )
     woocommerce_products.extend(response.json())
 
     for page_idx in range(1, int( response.headers.get('X-WP-TotalPages')) or 1):
-        response = get_request_request('products?per_page={0}&page={1}&{2}'.format(_per_page,page_idx+1,filter_condition) )
+        response = get_request_request('products?per_page={0}&page={1}&_fields=id,name&{2}'.format(_per_page,page_idx+1,filter_condition) )
+        woocommerce_products.extend(response.json())
+
+    return woocommerce_products
+
+def get_woocommerce_categories():
+    woocommerce_products = []
+
+    response = get_request_request('products/categories?per_page={0}&_fields=id,name,parent'.format(_per_page) )
+    woocommerce_products.extend(response.json())
+
+    for page_idx in range(1, int( response.headers.get('X-WP-TotalPages')) or 1):
+        response = get_request_request('products/categories?per_page={0}&page={1}&_fields=id,name,parent'.format(_per_page,page_idx+1) )
+        woocommerce_products.extend(response.json())
+
+    return woocommerce_products
+
+def get_woocommerce_media():
+    woocommerce_products = []
+
+    response = get_request_wordpress('media?per_page={0}&_fields=id,media_details'.format(_per_page) )
+    woocommerce_products.extend(response.json())
+
+    for page_idx in range(1, int( response.headers.get('X-WP-TotalPages')) or 1):
+        response = get_request_wordpress('media?per_page={0}&page={1}&_fields=id,media_details'.format(_per_page,page_idx+1) )
         woocommerce_products.extend(response.json())
 
     return woocommerce_products
@@ -186,11 +271,14 @@ def get_woocommerce_item_variants(woocommerce_product_id):
 
     filter_condition = ''
 
-    response = get_request_request('products/{0}/variations?per_page={1}&{2}'.format(woocommerce_product_id,_per_page,filter_condition))
+    response = get_request_request('products/{0}/variations?per_page={1}&{2}'.format(woocommerce_product_id,
+                                                                                     _per_page,filter_condition))
     woocommerce_product_variants.extend(response.json()) 
     
     for page_idx in range(1, int( response.headers.get('X-WP-TotalPages')) or 1):
-        response = get_request_request('products/{0}/variations?per_page={1}&page={2}&{3}'.format(woocommerce_product_id, _per_page, page_idx+1, filter_condition))
+        response = get_request_request(
+             'products/{0}/variations?per_page={1}&page={2}&{3}'.format(woocommerce_product_id,
+                                                                        _per_page, page_idx+1, filter_condition))
         woocommerce_product_variants.extend(response.json())
     
     return woocommerce_product_variants
