@@ -12,7 +12,36 @@ app_email = "info@libracore.com"
 app_license = "AGPL"
 app_url = "https://github.com/libracore/woocommerceconnector"
 
-fixtures = ["Custom Field"]
+# fixtures = ["Custom Field"]
+fixtures =[   {
+        "doctype": "Custom Field",
+        "filters": [
+            [
+                "name",
+                "in",
+                (
+                    "Print Settings-compact_item_print",
+                    "Customer-woocommerce_customer_id",
+                    "Customer-sync_with_woocommerce", 
+                    "Supplier-woocommerce_supplier_id", 
+                    "Address-woocommerce_address_id",
+                    "Address-woocommerce_company_name", 
+                    "Sales Order-woocommerce_order_id",
+                    "Sales Order-woocommerce_payment_method", 
+                    "Sales Invoice-woocommerce_order_id",
+                    "Delivery Note-woocommerce_order_id",
+                    "Delivery Note-woocommerce_fulfillment_id",  
+                    "Item-sync_with_woocommerce", 
+                    "Item-sync_qty_with_woocommerce", 
+                    "Item-stock_keeping_unit", 
+                    "Item-woocommerce_description", 
+                    "Item-woocommerce_product_id", 
+                    "Item-woocommerce_variant_id", 
+                    "Item-custom_woo_sync_as_variant"
+                ),
+            ]
+        ],
+    },] 
 # Includes in <head>
 # ------------------
 
@@ -70,8 +99,13 @@ after_install = "woocommerceconnector.after_install.create_weight_uom"
 # Hook on document methods and events
 
 doc_events = {
-	"Bin": {
-		"on_update": "woocommerceconnector.sync_products.trigger_update_item_stock"
+	"Sales Invoice": {
+		"on_submit": "woocommerceconnector.sync_products.trigger_update_item_stock",
+		"on_cancel": "woocommerceconnector.sync_products.trigger_update_item_stock",
+	},
+    "Purchase Receipt": {
+		"on_submit": "woocommerceconnector.sync_products.trigger_update_item_stock",
+		"on_cancel": "woocommerceconnector.sync_products.trigger_update_item_stock",
 	}
 }
 
