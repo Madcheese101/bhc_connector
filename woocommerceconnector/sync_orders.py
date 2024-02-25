@@ -173,7 +173,9 @@ def create_order(woocommerce_order, woocommerce_settings, company=None):
 def create_sales_order(woocommerce_order, woocommerce_settings, company=None):
     id = str(woocommerce_order.get("customer_id"))
     customer = frappe.get_all("Customer", filters=[["woocommerce_customer_id", "=", id]], fields=['name'])
-    backup_customer = frappe.get_all("Customer", filters=[["woocommerce_customer_id", "=", "Guest of Order-ID: {0}".format(woocommerce_order.get("id"))]], fields=['name'])
+    backup_customer = frappe.get_all("Customer", 
+                                     filters=[["woocommerce_customer_id", "=", "Guest of Order-ID: {0}".format(
+                                         woocommerce_order.get("id"))]], fields=['name'])
     if customer:
         customer = customer[0]['name']
     elif backup_customer:
@@ -181,7 +183,9 @@ def create_sales_order(woocommerce_order, woocommerce_settings, company=None):
     else:
         frappe.log_error("No customer found. This should never happen.")
 
-    so = frappe.db.get_value("Sales Order", {"woocommerce_order_id": woocommerce_order.get("id")}, "name")
+    so = frappe.db.get_value("Sales Order", 
+                             {"woocommerce_order_id": woocommerce_order.get("id")}, 
+                             "name")
     if not so:
         # get shipping/billing address
         shipping_address = get_customer_address_from_order('Shipping', woocommerce_order, customer)
@@ -208,12 +212,12 @@ def create_sales_order(woocommerce_order, woocommerce_settings, company=None):
             "selling_price_list": woocommerce_settings.price_list,
             "ignore_pricing_rule": 1,
             "items": get_order_items(woocommerce_order.get("line_items"), woocommerce_settings),
-            "taxes": get_order_taxes(woocommerce_order, woocommerce_settings),
+            # "taxes": get_order_taxes(woocommerce_order, woocommerce_settings),
             # disabled discount as WooCommerce will send this both in the item rate and as discount
             #"apply_discount_on": "Net Total",
             #"discount_amount": flt(woocommerce_order.get("discount_total") or 0),
             "currency": woocommerce_order.get("currency"),
-            "taxes_and_charges": tax_rules,
+            # "taxes_and_charges": tax_rules,
             "customer_address": billing_address,
             "shipping_address_name": shipping_address,
             "posting_date": woocommerce_order.get("date_created")[:10]          # pull posting date from WooCommerce
@@ -273,7 +277,7 @@ def get_customer_address_from_order(type, woocommerce_order, customer):
 
         except Exception as e:
             make_woocommerce_log(title=e, status="Error", method="create_customer_address", message=frappe.get_traceback(),
-                    request_data=woocommerce_customer, exception=True)
+                    request_data=customer, exception=True)
 
     return address_name
 
@@ -326,8 +330,10 @@ def get_fulfillment_items(dn_items, fulfillment_items, woocommerce_settings):
 
 def get_order_items(order_items, woocommerce_settings):
     items = []
+    # frappe.trhow(str(order_items))
     for woocommerce_item in order_items:
-        item_code = get_item_code(woocommerce_item)
+        # item_code = get_item_code(woocommerce_item)
+        item_code = woocommerce_item.get("sku")
         items.append({
             "item_code": item_code,
             "rate": woocommerce_item.get("price"),
@@ -407,11 +413,11 @@ def update_taxes_with_shipping_lines(taxes, shipping_lines, woocommerce_settings
 
 
 def get_shipping_account_head(shipping):
-        shipping_title = shipping.get("method_title").encode("utf-8")
-
-        shipping_account =  frappe.db.get_value("woocommerce Tax Account", \
-                {"parent": "WooCommerce Config", "woocommerce_tax": shipping_title}, "tax_account")
-
+        shipping_title = shipping.get("method_title")
+        shipping_account =  frappe.db.get_value("woocommerce Tax Account", 
+                                                {"parent": "WooCommerce Config", 
+                                                 "woocommerce_tax": shipping_title}, "tax_account")
+        
         if not shipping_account:
                 frappe.throw("Tax Account not specified for woocommerce shipping method  {0}".format(shipping.get("method_title")))
 
@@ -421,7 +427,7 @@ def get_shipping_account_head(shipping):
 def get_tax_account_head(tax):
     tax_title = tax.get("name").encode("utf-8") or tax.get("method_title").encode("utf-8")
 
-    tax_account =  frappe.db.get_value("woocommerce Tax Account", \
+    tax_account =  frappe.db.get_value("woocommerce Tax Account", 
         {"parent": "WooCommerce Config", "woocommerce_tax": tax_title}, "tax_account")
 
     if not tax_account:
