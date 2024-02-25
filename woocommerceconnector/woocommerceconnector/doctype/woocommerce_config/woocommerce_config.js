@@ -18,13 +18,6 @@ frappe.ui.form.on("WooCommerce Config", {
         frm.toggle_reqd("api_key", (frm.doc.app_type == "Private"));
         frm.toggle_reqd("password", (frm.doc.app_type == "Private"));
     },
-    item_code_based_on: function(frm) {
-        if (cur_frm.doc.item_code_based_on == 'Naming Series') {
-            cur_frm.set_df_property("item_code_naming_series", "reqd", '1');
-        } else {
-            cur_frm.set_df_property("item_code_naming_series", "reqd", 0);
-        }
-    },
     refresh: function(frm){
         
             
@@ -83,17 +76,31 @@ frappe.ui.form.on("WooCommerce Config", {
             frm.toggle_reqd("delivery_note_series", frm.doc.sync_delivery_note);
             
 
-            frm.add_custom_button(__('Sync WooCommerce'), function() {
+            frm.add_custom_button(__('Sync Products'), function() {
                 frappe.call({
                     method:"woocommerceconnector.api.sync_woocommerce",
+                    args: {
+                        sync_prods: true
+                    }
                 })
-            }).addClass("btn-primary");
-            
-            frm.add_custom_button(__("Sync WooCommerce IDs to ERP"), function(){
+            }, __('Sync'));
+            frm.add_custom_button(__('Sync Orders'), function() {
                 frappe.call({
-                    method:"woocommerceconnector.api.sync_woocommerce_ids",
+                    method:"woocommerceconnector.api.sync_woocommerce",
+                    args: {
+                        sync_order: true
+                    }
                 })
-            })
+            }, __('Sync'));
+            frm.add_custom_button(__('Sync Stock'), function() {
+                frappe.call({
+                    method:"woocommerceconnector.api.sync_woocommerce",
+                    args: {
+                        sync_stock: true
+                    }
+                })
+            }, __('Sync'));
+            frm.page.set_inner_btn_group_as_primary(__('Sync'));
         }
 
         // add buttons
@@ -117,6 +124,15 @@ frappe.ui.form.on("WooCommerce Config", {
         frappe.call({
             method: "woocommerceconnector.api.get_log_status",
             callback: function(r) {
+                if(r.message){
+                    frm.dashboard.set_headline_alert(r.message.text, r.message.alert_class)
+                }
+            }
+        })
+        frappe.call({
+            method: "woocommerceconnector.api.get_log_image_status",
+            callback: function(r) {
+                console.log(r)
                 if(r.message){
                     frm.dashboard.set_headline_alert(r.message.text, r.message.alert_class)
                 }

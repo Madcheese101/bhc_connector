@@ -1,4 +1,5 @@
 {
+ "actions": [],
  "creation": "2015-05-18 05:21:07.270859",
  "doctype": "DocType",
  "document_type": "System",
@@ -13,23 +14,17 @@
   "last_sync_datetime",
   "section_break_2",
   "woocommerce_url",
-  "column_break_3",
   "api_key",
   "api_secret",
+  "column_break_3",
+  "wp_user",
+  "wp_app_pass",
   "webhook_address",
   "access_token",
   "erp_settings",
-  "price_list",
   "if_not_exists_create_item_to_woocommerce",
-  "sync_items_from_woocommerce_to_erp",
   "sync_only_published",
-  "sync_item_qty_from_erpnext_to_woocommerce",
-  "default_item_group",
   "column_break_8",
-  "default_customer",
-  "customer_group",
-  "item_code_based_on",
-  "item_code_naming_series",
   "company_dependent_settings",
   "company",
   "cash_bank_account",
@@ -37,14 +32,15 @@
   "valuation_method",
   "column_break_20",
   "cost_center",
+  "price_list",
+  "default_customer",
+  "customer_group",
+  "section_break_22",
   "warehouse",
   "warehouses",
-  "section_break_22",
-  "weight_unit",
-  "column_break_29",
-  "dimensions_unit",
-  "attribute_for_uom",
-  "rewrite_stock_uom_from_wc_unit",
+  "column_break_oq0w7",
+  "trigger_update_item_stock",
+  "sync_item_qty_from_erpnext_to_woocommerce",
   "section_break_31",
   "html_16",
   "taxes",
@@ -60,14 +56,13 @@
   "sales_invoice_series",
   "import_payment",
   "section_advanced",
-  "sync_timeout",
-  "trigger_update_item_stock"
+  "sync_timeout"
  ],
  "fields": [
   {
    "fieldname": "status_html",
    "fieldtype": "HTML",
-   "label": "status html",
+   "label": "Status html",
    "read_only": 1
   },
   {
@@ -128,12 +123,14 @@
   {
    "fieldname": "api_key",
    "fieldtype": "Data",
-   "label": "API Key"
+   "label": "WooCommerce API Key",
+   "reqd": 1
   },
   {
    "fieldname": "api_secret",
    "fieldtype": "Password",
-   "label": "API Secret"
+   "label": "WooCommerce API Secret",
+   "reqd": 1
   },
   {
    "fieldname": "webhook_address",
@@ -166,18 +163,6 @@
    "label": "If item does not exist, create item in woocommerce"
   },
   {
-   "default": "0",
-   "fieldname": "sync_items_from_woocommerce_to_erp",
-   "fieldtype": "Check",
-   "label": "Sync items from WooCommerce to ERPNext"
-  },
-  {
-   "fieldname": "default_item_group",
-   "fieldtype": "Link",
-   "label": "Default Item Group",
-   "options": "Item Group"
-  },
-  {
    "fieldname": "column_break_8",
    "fieldtype": "Column Break"
   },
@@ -197,7 +182,8 @@
   },
   {
    "fieldname": "company_dependent_settings",
-   "fieldtype": "Section Break"
+   "fieldtype": "Section Break",
+   "label": "Accounting"
   },
   {
    "fieldname": "company",
@@ -240,7 +226,7 @@
    "description": "Sync Item Quantity, from seleted Warehouse with woocommerce",
    "fieldname": "warehouse",
    "fieldtype": "Link",
-   "label": "Warehouse",
+   "label": "Default Warehouse",
    "options": "Warehouse"
   },
   {
@@ -252,27 +238,13 @@
   },
   {
    "fieldname": "section_break_22",
-   "fieldtype": "Section Break"
-  },
-  {
-   "fieldname": "weight_unit",
-   "fieldtype": "Link",
-   "label": "Woocommerce Weight unit",
-   "options": "UOM"
-  },
-  {
-   "fieldname": "column_break_29",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "dimensions_unit",
-   "fieldtype": "Link",
-   "label": "Woocommerce Dimensions unit",
-   "options": "UOM"
+   "fieldtype": "Section Break",
+   "label": "Stock Settings"
   },
   {
    "fieldname": "section_break_31",
-   "fieldtype": "Section Break"
+   "fieldtype": "Section Break",
+   "label": "Taxes"
   },
   {
    "fieldname": "html_16",
@@ -298,7 +270,8 @@
   },
   {
    "fieldname": "section_break_25",
-   "fieldtype": "Section Break"
+   "fieldtype": "Section Break",
+   "label": "Sales Order Settings"
   },
   {
    "fieldname": "sales_order_series",
@@ -354,36 +327,12 @@
   },
   {
    "default": "0",
-   "depends_on": "eval:doc.sync_items_from_woocommerce_to_erp==1",
    "fieldname": "sync_item_qty_from_erpnext_to_woocommerce",
    "fieldtype": "Check",
    "label": "Sync item QTY from ERPNext to WooCommerce"
   },
   {
-   "fieldname": "attribute_for_uom",
-   "fieldtype": "Data",
-   "label": "Attribute for UOM"
-  },
-  {
-   "fieldname": "item_code_based_on",
-   "fieldtype": "Select",
-   "label": "Item code based on..",
-   "options": "WooCommerce ID\nWooCommerce ID + Name\nWooCommerce Name\nRandom Hash\nNaming Series",
-   "reqd": 1
-  },
-  {
-   "depends_on": "eval:doc.item_code_based_on=='Naming Series'",
-   "fieldname": "item_code_naming_series",
-   "fieldtype": "Select",
-   "label": "Item code naming series"
-  },
-  {
-   "default": "0",
-   "fieldname": "rewrite_stock_uom_from_wc_unit",
-   "fieldtype": "Check",
-   "label": "rewrite stock uom from wc unit"
-  },
-  {
+   "description": "Only sync orders with the following Status from woocommerce",
    "fieldname": "woocommerce_so_status",
    "fieldtype": "Table",
    "label": "WooCommerce SO Status for Import",
@@ -400,10 +349,27 @@
    "fieldname": "sync_only_published",
    "fieldtype": "Check",
    "label": "Only sync published items"
+  },
+  {
+   "fieldname": "wp_user",
+   "fieldtype": "Data",
+   "label": "Wordpress User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "wp_app_pass",
+   "fieldtype": "Password",
+   "label": "Wordpress Application Password",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_oq0w7",
+   "fieldtype": "Column Break"
   }
  ],
  "issingle": 1,
- "modified": "2022-03-18 20:36:00.328416",
+ "links": [],
+ "modified": "2024-02-03 01:33:42.807849",
  "modified_by": "Administrator",
  "module": "WooCommerceConnector",
  "name": "WooCommerce Config",
@@ -421,5 +387,6 @@
   }
  ],
  "sort_field": "modified",
- "sort_order": "DESC"
+ "sort_order": "DESC",
+ "states": []
 }
