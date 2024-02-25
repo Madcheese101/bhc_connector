@@ -33,17 +33,19 @@ def is_woocommerce_enabled():
 	
 	return True
 	
-def make_woocommerce_log(title="Sync Log", status="Queued", method="sync_woocommerce", message=None, exception=False, 
-name=None, request_data={}):
+def make_woocommerce_log(title="Sync Log", status="Queued", 
+						 method="sync_woocommerce", message=None, 
+						 exception=False, name=None, request_data={},
+						 item_missing_img = None):
 	if not name:
 		name = frappe.db.get_value("woocommerce Log", {"status": "Queued"})
 		
 		if name:
-			""" if name not provided by log calling method then fetch existing queued state log"""
+			# if name not provided by log calling method then fetch existing queued state log
 			log = frappe.get_doc("woocommerce Log", name)
 		
 		else:
-			""" if queued job is not found create a new one."""
+			# if queued job is not found create a new one.
 			log = frappe.get_doc({"doctype":"woocommerce Log"}).insert(ignore_permissions=True)
 		
 		if exception:
@@ -55,6 +57,8 @@ name=None, request_data={}):
 		log.method = method
 		log.status = status
 		log.request_data= json.dumps(request_data)
+		if item_missing_img:
+			log.set("items_missing_images", item_missing_img)
 		
 		log.save(ignore_permissions=True)
 		frappe.db.commit()
