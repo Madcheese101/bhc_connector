@@ -3,6 +3,7 @@
 
 frappe.ui.form.on('woocommerce Log', {
 	refresh: function(frm) {
-
+		frm.add_custom_button(__('Resync Images'), function() {
+			frm.call("sync_missing_images")});
 	}
 });
