@@ -18,13 +18,17 @@ def sync_woocommerce_orders():
     frappe.local.form_dict.count_dict["orders"] = 0
     woocommerce_settings = frappe.get_doc("WooCommerce Config", "WooCommerce Config")
     woocommerce_order_status_for_import = get_woocommerce_order_status_for_import()
+    synced_orders = frappe.get_list("Sales Order", 
+                                    filters={"woocommerce_order_id": ["not in", [None,""]]},
+                                    pluck="woocommerce_order_id")
+    
     if not len(woocommerce_order_status_for_import) > 0:
         woocommerce_order_status_for_import = ['processing']
-        
+      
     for woocommerce_order_status in woocommerce_order_status_for_import:
         for woocommerce_order in get_woocommerce_orders(woocommerce_order_status):
-            so = frappe.db.get_value("Sales Order", {"woocommerce_order_id": woocommerce_order.get("id")}, "name")
-            if not so:
+            
+            if woocommerce_order.get("id") not in synced_orders:
                 if valid_customer_and_product(woocommerce_order):
                     try:
                         create_order(woocommerce_order, woocommerce_settings)
@@ -183,74 +187,66 @@ def create_sales_order(woocommerce_order, woocommerce_settings, company=None):
     else:
         frappe.log_error("No customer found. This should never happen.")
 
-    so = frappe.db.get_value("Sales Order", 
-                             {"woocommerce_order_id": woocommerce_order.get("id")}, 
-                             "name")
-    if not so:
-        # get shipping/billing address
-        shipping_address = get_customer_address_from_order('Shipping', woocommerce_order, customer)
-        billing_address = get_customer_address_from_order('Billing', woocommerce_order, customer)
+    # get shipping/billing address
+    shipping_address = get_customer_address_from_order('Shipping', woocommerce_order, customer)
+    billing_address = get_customer_address_from_order('Billing', woocommerce_order, customer)
 
-        # get applicable tax rule from configuration
-        tax_rules = frappe.get_all("WooCommerce Tax Rule", filters={'currency': woocommerce_order.get("currency")}, fields=['tax_rule'])
-        if not tax_rules:
-            # fallback: currency has no tax rule, try catch-all
-            tax_rules = frappe.get_all("WooCommerce Tax Rule", filters={'currency': "%"}, fields=['tax_rule'])
-        if tax_rules:
-            tax_rules = tax_rules[0]['tax_rule']
-        else:
-            tax_rules = ""
-
-        # frappe.throw(str(woocommerce_order.get("date_created")[:10]))
-        so = frappe.new_doc('Sales Order')
-        so.naming_series = woocommerce_settings.sales_order_series or "SO-woocommerce-"
-        so.order_type = "Sales"
-        so.woocommerce_order_id = woocommerce_order.get("id"),
-        so.woocommerce_payment_method = woocommerce_order.get("payment_method_title"),
-        so.customer = customer,
-        so.customer_group = woocommerce_settings.customer_group,  # hard code group, as this was missing since v12
-        so.delivery_date = nowdate(),
-        so.selling_price_list = woocommerce_settings.price_list,
-        # so.ignore_pricing_rule = 1,
-        so.company = woocommerce_settings.company,
-        so.currency = woocommerce_order.get("currency"),
-        so.customer_address = billing_address,
-        so.shipping_address_name = shipping_address,
-        so.posting_date = woocommerce_order.get("date_created")[:10]
-        so.set_warehouse = woocommerce_settings.warehouse
-        total = 0
-        for woocommerce_item in woocommerce_order.get("line_items"):
-            # item_code = get_item_code(woocommerce_item)
-            item_code = woocommerce_item.get("sku")
-            so.append("items",{
-                    "item_code": item_code,
-                    "rate": flt(woocommerce_item.get("price")),
-                    "delivery_date": nowdate(),
-                    "qty": woocommerce_item.get("quantity"),
-                    "warehouse": woocommerce_settings.warehouse
-                })
-            total += flt(woocommerce_item.get("price"))
-        
-        so.append("payment_schedule", {"due_date": nowdate(), 
-                                       "payment_amount": total,
-                                       "invoice_portion": 100})
-        # so.flags.ignore_mandatory = True
-
-        # alle orders in ERP = submitted
-        so.save(ignore_permissions=True)
-        so.submit()
-        #if woocommerce_order.get("status") == "on-hold":
-        #    so.save(ignore_permissions=True)
-        #elif woocommerce_order.get("status") in ("cancelled", "refunded", "failed"):
-        #    so.save(ignore_permissions=True)
-        #    so.submit()
-        #    so.cancel()
-        #else:
-        #    so.save(ignore_permissions=True)
-        #    so.submit()
-
+    # get applicable tax rule from configuration
+    tax_rules = frappe.get_all("WooCommerce Tax Rule", filters={'currency': woocommerce_order.get("currency")}, fields=['tax_rule'])
+    if not tax_rules:
+        # fallback: currency has no tax rule, try catch-all
+        tax_rules = frappe.get_all("WooCommerce Tax Rule", filters={'currency': "%"}, fields=['tax_rule'])
+    if tax_rules:
+        tax_rules = tax_rules[0]['tax_rule']
     else:
-        so = frappe.get_doc("Sales Order", so)
+        tax_rules = ""
+
+    so = frappe.new_doc('Sales Order')
+    so.naming_series = woocommerce_settings.sales_order_series or "SO-woocommerce-"
+    so.order_type = "Sales"
+    so.woocommerce_order_id = woocommerce_order.get("id"),
+    so.woocommerce_payment_method = woocommerce_order.get("payment_method_title"),
+    so.customer = customer,
+    so.customer_group = woocommerce_settings.customer_group,  # hard code group, as this was missing since v12
+    so.delivery_date = nowdate(),
+    so.selling_price_list = woocommerce_settings.price_list,
+    # so.ignore_pricing_rule = 1,
+    so.company = woocommerce_settings.company,
+    so.currency = woocommerce_order.get("currency"),
+    so.customer_address = billing_address,
+    so.shipping_address_name = shipping_address,
+    so.posting_date = woocommerce_order.get("date_created")[:10]
+    so.set_warehouse = woocommerce_settings.warehouse
+    total = 0
+    for woocommerce_item in woocommerce_order.get("line_items"):
+        # item_code = get_item_code(woocommerce_item)
+        item_code = woocommerce_item.get("sku")
+        so.append("items",{
+                "item_code": item_code,
+                "rate": flt(woocommerce_item.get("price")),
+                "delivery_date": nowdate(),
+                "qty": woocommerce_item.get("quantity"),
+                "warehouse": woocommerce_settings.warehouse
+            })
+        total += flt(woocommerce_item.get("price"))
+    
+    so.append("payment_schedule", {"due_date": nowdate(), 
+                                    "payment_amount": total,
+                                    "invoice_portion": 100})
+    # so.flags.ignore_mandatory = True
+
+    # alle orders in ERP = submitted
+    so.save(ignore_permissions=True)
+    so.submit()
+    #if woocommerce_order.get("status") == "on-hold":
+    #    so.save(ignore_permissions=True)
+    #elif woocommerce_order.get("status") in ("cancelled", "refunded", "failed"):
+    #    so.save(ignore_permissions=True)
+    #    so.submit()
+    #    so.cancel()
+    #else:
+    #    so.save(ignore_permissions=True)
+    #    so.submit()
 
     frappe.db.commit()
     make_woocommerce_log(title="create sales order", status="Success", method="create_sales_order",
