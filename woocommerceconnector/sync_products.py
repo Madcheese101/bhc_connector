@@ -30,11 +30,10 @@ def sync_erpnext_items(price_list):
     variants_to_insert = {}
     image_error_list = []
     item_has_no_image = []
-    # frappe.throw(str(get_woocommerce_media()))
+
     woo_prods = {i["name"]: int(i["id"]) 
                 for i in get_woocommerce_items(True)}
-    woo_media = {(i["media_details"]["file"]).split("/")[-1]: int(i["id"]) 
-                for i in get_woocommerce_media()}
+    woo_media = get_media()
     woo_cats = sync_categories()
 
     for item in get_erpnext_items(price_list):
@@ -355,6 +354,14 @@ def get_item_name_and_attrs(attributes):
     item_name = f"{group}{model}"
     return item_name or "", attrs
 
+def get_media():
+    media = {}
+    for image in get_woocommerce_media():
+        detail = image.get("media_details")
+        if "file" in detail.keys():
+            name = detail["file"].split("/")[-1]
+            media[name]= int(image.get("id"))
+    return media
 
 def sync_categories():
     new_data = {"create":[]}
