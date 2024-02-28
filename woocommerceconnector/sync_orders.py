@@ -200,30 +200,41 @@ def create_sales_order(woocommerce_order, woocommerce_settings, company=None):
             tax_rules = tax_rules[0]['tax_rule']
         else:
             tax_rules = ""
-        so = frappe.get_doc({
-            "doctype": "Sales Order",
-            "naming_series": woocommerce_settings.sales_order_series or "SO-woocommerce-",
-            "woocommerce_order_id": woocommerce_order.get("id"),
-            "woocommerce_payment_method": woocommerce_order.get("payment_method_title"),
-            "customer": customer,
-            "customer_group": woocommerce_settings.customer_group,  # hard code group, as this was missing since v12
-            "delivery_date": nowdate(),
-            "company": woocommerce_settings.company,
-            "selling_price_list": woocommerce_settings.price_list,
-            "ignore_pricing_rule": 1,
-            "items": get_order_items(woocommerce_order.get("line_items"), woocommerce_settings),
-            # "taxes": get_order_taxes(woocommerce_order, woocommerce_settings),
-            # disabled discount as WooCommerce will send this both in the item rate and as discount
-            #"apply_discount_on": "Net Total",
-            #"discount_amount": flt(woocommerce_order.get("discount_total") or 0),
-            "currency": woocommerce_order.get("currency"),
-            # "taxes_and_charges": tax_rules,
-            "customer_address": billing_address,
-            "shipping_address_name": shipping_address,
-            "posting_date": woocommerce_order.get("date_created")[:10]          # pull posting date from WooCommerce
-        })
 
-        so.flags.ignore_mandatory = True
+        # frappe.throw(str(woocommerce_order.get("date_created")[:10]))
+        so = frappe.new_doc('Sales Order')
+        so.naming_series = woocommerce_settings.sales_order_series or "SO-woocommerce-"
+        so.order_type = "Sales"
+        so.woocommerce_order_id = woocommerce_order.get("id"),
+        so.woocommerce_payment_method = woocommerce_order.get("payment_method_title"),
+        so.customer = customer,
+        so.customer_group = woocommerce_settings.customer_group,  # hard code group, as this was missing since v12
+        so.delivery_date = nowdate(),
+        so.selling_price_list = woocommerce_settings.price_list,
+        # so.ignore_pricing_rule = 1,
+        so.company = woocommerce_settings.company,
+        so.currency = woocommerce_order.get("currency"),
+        so.customer_address = billing_address,
+        so.shipping_address_name = shipping_address,
+        so.posting_date = woocommerce_order.get("date_created")[:10]
+        so.set_warehouse = woocommerce_settings.warehouse
+        total = 0
+        for woocommerce_item in woocommerce_order.get("line_items"):
+            # item_code = get_item_code(woocommerce_item)
+            item_code = woocommerce_item.get("sku")
+            so.append("items",{
+                    "item_code": item_code,
+                    "rate": flt(woocommerce_item.get("price")),
+                    "delivery_date": nowdate(),
+                    "qty": woocommerce_item.get("quantity"),
+                    "warehouse": woocommerce_settings.warehouse
+                })
+            total += flt(woocommerce_item.get("price"))
+        
+        so.append("payment_schedule", {"due_date": nowdate(), 
+                                       "payment_amount": total,
+                                       "invoice_portion": 100})
+        # so.flags.ignore_mandatory = True
 
         # alle orders in ERP = submitted
         so.save(ignore_permissions=True)
