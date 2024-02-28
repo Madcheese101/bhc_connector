@@ -8,7 +8,7 @@ from frappe.utils import flt, nowdate, cint
 from .woocommerce_requests import get_request, get_woocommerce_orders, get_woocommerce_tax, get_woocommerce_customer, put_request
 from erpnext.selling.doctype.sales_order.sales_order import make_delivery_note, make_sales_invoice
 import requests.exceptions
-import base64, requests, datetime, os
+import requests
 
 
 def sync_orders():
@@ -27,7 +27,7 @@ def sync_woocommerce_orders():
       
     for woocommerce_order_status in woocommerce_order_status_for_import:
         for woocommerce_order in get_woocommerce_orders(woocommerce_order_status):
-            
+
             if woocommerce_order.get("id") not in synced_orders:
                 if valid_customer_and_product(woocommerce_order):
                     try:
@@ -162,7 +162,6 @@ def get_country_name(code):
     for _coutry_name in frappe.db.sql(coutry_names, as_dict=1):
         coutry_name = _coutry_name.country_name
     return coutry_name
-
 
 def create_order(woocommerce_order, woocommerce_settings, company=None):
     so = create_sales_order(woocommerce_order, woocommerce_settings, company)
@@ -464,4 +463,4 @@ def close_synced_woocommerce_order(wooid):
             
     except requests.exceptions.HTTPError as e:
         make_woocommerce_log(title=e.message, status="Error", method="close_synced_woocommerce_order", message=frappe.get_traceback(),
-            request_data=woocommerce_order, exception=True)
+            request_data=wooid, exception=True)
