@@ -287,9 +287,11 @@ def sync_to_woo_as_var(item, price_list, warehouse_list
         # if woocommerce_variant_id in 
         # erpnext item is not set
         if not item.get("woocommerce_variant_id"):
+            meta = [{"key": "ideapark_variation_images", "value": [img["id"]]}]
             variant_data = {
                 "sku": item.get("name"),
-                "image": img
+                "image": img,
+                "meta_data": meta
             }
             variant_data.update( get_price_and_stock_details(item, warehouse_list, price_list) )
             variant_options = []
