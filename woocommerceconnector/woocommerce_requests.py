@@ -68,6 +68,11 @@ def get_request_wordpress(path, settings=None):
         if not settings:
                 settings = get_woocommerce_settings()
         
+        if cint(settings['verify_ssl']) == 1:
+            verify_ssl = True
+        else:
+            verify_ssl = False
+
         wpapi = WAPI(
                 url=settings['woocommerce_url'],
                 api="wp-json",
@@ -76,6 +81,7 @@ def get_request_wordpress(path, settings=None):
                 consumer_secret="",
                 wp_user=settings['wp_user'],
                 wp_pass=settings['wp_app_pass'],
+                verify_ssl=verify_ssl,
                 basic_auth = True,
                 user_auth = True,
             )
