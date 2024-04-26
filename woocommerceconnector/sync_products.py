@@ -39,8 +39,8 @@ def sync_erpnext_items(price_list):
     for item in get_erpnext_items(price_list):
         try:
             img = {}
-            if item.image_name:
-                item_image = item.image_name.split("/")[-1]
+            if item.image:
+                item_image = item.image.split("/")[-1]
                 if item_image in woo_media.keys():
                     img = {"id": woo_media[item_image]}
                 else:
@@ -114,7 +114,7 @@ def get_erpnext_items(price_list):
         # item_price_condition = "AND `tabItem Price`.`modified` >= '{0}' ".format(woocommerce_settings.last_sync_datetime)
 
     item_from_master = """select name, item_code, item_name, item_group,
-        description, woocommerce_description, has_variants, variant_of, stock_uom, image, image_name, woocommerce_product_id,
+        description, woocommerce_description, has_variants, variant_of, stock_uom, image, woocommerce_product_id,
         woocommerce_variant_id, sync_qty_with_woocommerce, weight_per_unit, weight_uom from tabItem
         where sync_with_woocommerce=1 and (variant_of is null or variant_of = '')
         and (disabled is null or disabled = 0)  %s """ % last_sync_condition
@@ -142,7 +142,6 @@ def get_erpnext_items(price_list):
                                      `tabItem`.`variant_of`, 
                                      `tabItem`.`stock_uom`, 
                                      `tabItem`.`image`, 
-                                     `tabItem`.`image_name`, 
                                      `tabItem`.`woocommerce_product_id`,
                                      `tabItem`.`woocommerce_variant_id`, 
                                      `tabItem`.`sync_qty_with_woocommerce`, 
@@ -288,7 +287,7 @@ def sync_to_woo_as_var(item, price_list, warehouse_list
         # if woocommerce_variant_id in 
         # erpnext item is not set
         if not item.get("woocommerce_variant_id"):
-            meta = [{"key": "ideapark_variation_images", "value": [img["id"]]}] if img else []
+            meta = [{"key": "ideapark_variation_images", "value": [img["id"]]}]
             variant_data = {
                 "sku": item.get("name"),
                 "image": img,
@@ -466,7 +465,7 @@ def get_variant_attributes(item, price_list, warehouse):
 
 def get_price_and_stock_details(item, warehouse_list, price_list):
     qty = frappe.db.get_value("Bin", 
-                              {"item_code":"01.045.0220",
+                              {"item_code":item.item_code,
                                 "warehouse": ["in", warehouse_list]}, 
                                 "sum(actual_qty) - sum(reserved_qty) as actual_qty") or 0
     
@@ -607,7 +606,7 @@ def update_item_stock(item, woocommerce_settings, bin=None, force=False):
                 warehouse_list.extend([w.warehouse for w in woocommerce_settings.warehouses])
 
                 qty = frappe.db.get_value("Bin", 
-                                    {"item_code":"01.045.0220", 
+                                    {"item_code":item_code, 
                                     "warehouse": ["in", warehouse_list]}, 
                                     "sum(actual_qty) - sum(reserved_qty) as actual_qty") or 0
                 
