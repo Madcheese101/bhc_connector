@@ -562,7 +562,8 @@ def update_item_stock_qty(force=False):
                                         "woocommerce_product_id",
                                         "woocommerce_variant_id"
                                         ], 
-                                filters={"sync_qty_with_woocommerce": '1',
+                                filters={"sync_with_woocommerce": 1,
+                                         "sync_qty_with_woocommerce": 1,
                                           "disabled": ("!=", 1)})
     for item in items_list:
         try:
