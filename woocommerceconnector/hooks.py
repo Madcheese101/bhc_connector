@@ -38,7 +38,12 @@ fixtures =[   {
                     "Item-woocommerce_product_id", 
                     "Item-woocommerce_variant_id", 
                     "Item-custom_woo_sync_as_variant",
-                    "Item-custom_image_name"
+                    "Item-custom_image_name",
+                    "Item Attribute-custom_sync_with_woocommerce",
+                    "Item Attribute-woocommerce_attribute_id",
+                    "Item Attribute Value-custom_woocommerce_id",
+                    "Item Group-custom_woocommerce_id",
+                    "Item Group-custom_sync_with_woocommerce"
                 ),
             ]
         ],
