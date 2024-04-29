@@ -101,7 +101,8 @@ def get_request_wordpress(path, settings=None):
 def get_request(path, settings=None):
     return get_request_request(path, settings).json()
 
-def get_filter_request(path, params):
+@frappe.whitelist()
+def get_filter_request(path, params=None):
     settings = get_woocommerce_settings()
 
     if cint(settings['verify_ssl']) == 1:
@@ -168,7 +169,7 @@ def put_request(path, data):
                 consumer_secret=settings['api_secret'],
                 verify_ssl=settings['verify_ssl'],
                 wp_api=True,
-                version="wc/v3",
+                version="wc/v2",
                 timeout=5000
         )
         #frappe.log_error("{0} data: {1}".format(path, data))
@@ -230,6 +231,7 @@ def get_filtering_condition():
 def get_country():
     return get_request('/admin/countries.json')['countries']
 
+# delete after refactoring product sync code
 def get_woocommerce_items(ignore_filter_conditions=False):
     woocommerce_products = []
 
@@ -239,26 +241,27 @@ def get_woocommerce_items(ignore_filter_conditions=False):
         if cint(frappe.get_value("WooCommerce Config", "WooCommerce Config", "sync_only_published")) == 1:
             filter_condition += "&status=publish"
 
-    response = get_request_request('products?per_page={0}&_fields=id,name&{1}'.format(_per_page,filter_condition) )
+    response = get_request_request('products?per_page={0}&_fields=id,name,attributes&{1}'.format(_per_page,filter_condition) )
     woocommerce_products.extend(response.json())
 
     for page_idx in range(1, int( response.headers.get('X-WP-TotalPages')) or 1):
-        response = get_request_request('products?per_page={0}&page={1}&_fields=id,name&{2}'.format(_per_page,page_idx+1,filter_condition) )
+        response = get_request_request('products?per_page={0}&page={1}&_fields=id,name,attributes&{2}'.format(_per_page,page_idx+1,filter_condition) )
         woocommerce_products.extend(response.json())
 
     return woocommerce_products
 
+# delete after fixing issues
 def get_woocommerce_categories():
-    woocommerce_products = []
+    woocommerce_categories = []
 
     response = get_request_request('products/categories?per_page={0}&_fields=id,name,parent'.format(_per_page) )
-    woocommerce_products.extend(response.json())
+    woocommerce_categories.extend(response.json())
 
     for page_idx in range(1, int( response.headers.get('X-WP-TotalPages')) or 1):
         response = get_request_request('products/categories?per_page={0}&page={1}&_fields=id,name,parent'.format(_per_page,page_idx+1) )
-        woocommerce_products.extend(response.json())
+        woocommerce_categories.extend(response.json())
 
-    return woocommerce_products
+    return woocommerce_categories
 
 def get_woocommerce_media():
     woocommerce_products = []
@@ -277,13 +280,13 @@ def get_woocommerce_item_variants(woocommerce_product_id):
 
     filter_condition = ''
 
-    response = get_request_request('products/{0}/variations?per_page={1}&{2}'.format(woocommerce_product_id,
+    response = get_request_request('products/{0}/variations?per_page={1}&_fields=id,sku,attributes&{2}'.format(woocommerce_product_id,
                                                                                      _per_page,filter_condition))
     woocommerce_product_variants.extend(response.json()) 
     
     for page_idx in range(1, int( response.headers.get('X-WP-TotalPages')) or 1):
         response = get_request_request(
-             'products/{0}/variations?per_page={1}&page={2}&{3}'.format(woocommerce_product_id,
+             'products/{0}/variations?per_page={1}&page={2}&_fields=id,sku,attributes&{3}'.format(woocommerce_product_id,
                                                                         _per_page, page_idx+1, filter_condition))
         woocommerce_product_variants.extend(response.json())
     
