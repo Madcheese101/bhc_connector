@@ -13,6 +13,30 @@ from .woocommerce_requests import (post_request, get_woocommerce_items,
                                    get_woocommerce_categories,
                                    get_woocommerce_media)
 
+@frappe.whitelist()
+def fix_issues():
+    sync_attributes()
+    sync_to_erpnext()
+    woo_attrs = {i["name"]: int(i["woocommerce_id"]) 
+                for i in frappe.get_list("Item Attribute",fields=['name', "woocommerce_id"], filters={"woocommerce_id":["!=",""]})}
+    woo_prods = get_woocommerce_items(True)
+    for prod in woo_prods:
+        old_attr = prod["attributes"]
+        prod_id = prod["id"]
+        for attr in old_attr:
+            if attr["name"] in woo_attrs.keys():
+                attr["id"] = woo_attrs[attr["name"]]
+
+        variants = get_woocommerce_item_variants(prod_id)
+        for var in variants:
+            var_attr = var["attributes"]
+            for attr in var_attr:
+                if attr["name"] in woo_attrs.keys():
+                    attr["id"] = woo_attrs[attr["name"]] 
+        edited_prod = put_request(f"products/{prod_id}", {"attributes":old_attr})
+        var_result = put_request(f"products/{prod_id}/variations/batch", {"update": variants})
+    frappe.msgprint("done")
+
 def sync_products(price_list):
     woocommerce_settings = frappe.get_doc("WooCommerce Config", "WooCommerce Config")
     woocommerce_item_list = []
@@ -251,7 +275,6 @@ def sync_to_woo_as_var(item, price_list, warehouse_list
         if (item_name in woo_prods.keys()):
             # get parent item
             parent_woo_item = woo_prods[item_name]
-            # frappe.throw(str(parent_woo_item))
         # else create new item and set item fields
         else:
             options = []
@@ -365,51 +388,144 @@ def get_media():
             media[name]= int(image.get("id"))
     return media
 
-def sync_categories():
-    new_data = {"create":[]}
-    woo_cats = {i["name"]: int(i["id"]) 
-                for i in get_woocommerce_categories()}
-    # for item in get_woocommerce_categories():
-    #     woo_cats[item["name"]] = int(item["id"])
+def sync_parent_categories():
+    # get unsynced parent item groups
+    unsynced_parents = frappe.get_list("Item Group",
+                fields=['name', 'woocommerce_id'],
+                filters={"is_group": 1,
+                        "sync_with_woocommerce": 1,
+                        "woocommerce_id": "",
+                        "parent_item_group": "Products - منتجات"}, #make this line dynamic
+                )
+    if len(unsynced_parents) > 100:
+        parent_chunks = [unsynced_parents[i:i + 100] for i in range(0, len(unsynced_parents), 100)]
+        values = {}
+        for chunck in parent_chunks:
+            result = post_request("products/categories/batch", {"create":chunck})
+            values.update({i["name"]: int(i["id"]) for i in result["create"]})
+    elif unsynced_parents:
+        result = post_request("products/categories/batch", {"create":unsynced_parents})
+        values = {i["name"]: int(i["id"]) for i in result["create"]}
+    
+    for parent in unsynced_parents:
+        frappe.db.set_value('Item Group', parent.name, 'woocommerce_id', values[parent.name])
 
-    parents = frappe.get_list("Item Group", 
-                              filters={"is_group": 1,
-                                       "parent_item_group": "Products - منتجات"},
-                              pluck="name")
-    for parent in parents:
-        if parent in woo_cats.keys():
-            parent_category = int(woo_cats[parent])
-        else:
-            parent_category = create_woo_category(name=parent).get("id")
-            woo_cats[parent] = int(parent_category)
+def sync_child_categories():
+        # get unsynced item groups
+    synced_parents = frappe.get_list("Item Group",
+                fields=['name', 'woocommerce_id'],
+                filters={"is_group": 1,
+                        "sync_with_woocommerce": 1,
+                        "woocommerce_id": ["!=",""],
+                        "parent_item_group": "Products - منتجات"}, #make this line dynamic
+                )
+    
+    for parent in synced_parents:
+        parent_woo_id = parent.woocommerce_id
+        children = frappe.get_list("Item Group",
+                                   fields=['name', f'({parent_woo_id}) as parent'],
+                                   filters={
+                                       "parent_item_group": parent.name, 
+                                       "sync_with_woocommerce": 1, 
+                                       "woocommerce_id": ""})
+        if len(children) > 100:
+            parent_chunks = [children[i:i + 100] for i in range(0, len(children), 100)]
+            values = {}
+            for chunck in parent_chunks:
+                result = post_request("products/categories/batch", {"create":chunck})
+                values.update({i["name"]: int(i["id"]) for i in result["create"]})
+        elif children:
+            result = post_request("products/categories/batch", {"create":children})
+            values = {i["name"]: int(i["id"]) for i in result["create"]}
         
-        children = frappe.get_list("Item Group", filters={"parent_item_group": parent}, pluck="name")
         for child in children:
-            if child not in woo_cats.keys():
-                new_data["create"].append({
-                    "name": child, "parent": parent_category})
-    if new_data:
-        result = create_woo_category(data=new_data)
-        if result and result["create"]:
-            res = result["create"]
-            for item in res:
-                woo_cats[item["name"]] = int(item["id"])
-    return woo_cats
+            frappe.db.set_value('Item Group', child.name, 'woocommerce_id', values[child.name])
 
-def create_woo_category(data=None, name=None, parent=None):
-    if data:
-        fdata = data
-        path = "products/categories/batch"
-    else:
-        fdata = {
-            "name": name,
-        } 
-        if parent:
-            fdata["parent"] = parent
-        path = "products/categories"
+def sync_categories():
+    sync_parent_categories()
+    sync_child_categories()
+    # fetch all item groups synced to wordpress
+    woo_categories = frappe.get_list("Item Group",
+                fields=['name', 'woocommerce_id'],
+                filters={
+                        "sync_with_woocommerce": 1,
+                        "woocommerce_id": ["!=",""],
+                    },
+                )
+    # make each item group name as key and woo_id as its value
+    return_result = {i["name"]: int(i["woocommerce_id"]) for i in woo_categories}
+    return return_result #to use it with product creation
 
-    new_item = post_request(path, fdata)
-    return new_item
+def sync_new_attributes():
+        # check for new attributes
+    new_erp_attributes = frappe.get_list("Item Attribute", 
+                            filters={
+                                        "sync_with_woocommerce": 1,
+                                        "woocommerce_id": ""
+                                    },
+                            pluck="name")
+    # insert new attributes with their values
+    for attribute in new_erp_attributes:
+        woo_att = post_request("products/attributes", {"name": attribute})
+        # frappe.throw(str(woo_att.get("id")))
+        children = frappe.get_all("Item Attribute Value",
+                        fields=["(attribute_value) as name", "(name) as child_id"],
+                        filters={"parent":attribute})
+        if children and woo_att:
+            woo_att_id = woo_att["id"]
+            # if children length is longer than 100 then insert in chuncks
+            if len(children) > 100:
+                child_chunks = [children[i:i + 100] for i in range(0, len(children), 100)]
+                values = {}
+                for chunck in child_chunks:
+                    result = post_request(f"products/attributes/{woo_att_id}/terms/batch", {"create":chunck})
+                    values.update({i["name"]: int(i["id"]) for i in result["create"]})
+
+            # if less than 100 then insert in one go
+            elif children:
+                result = post_request(f"products/attributes/{woo_att_id}/terms/batch", {"create": children})
+                values = {i["name"]: int(i["id"]) for i in result["create"]}
+
+            frappe.db.set_value('Item Attribute', attribute, 'woocommerce_id', int(woo_att_id))
+
+            for child in children:
+                frappe.db.set_value('Item Attribute Value', child.child_id, 'woocommerce_id', values[child.name])
+
+def sync_new_attribute_values():
+    # TO-DO: filter it by last last synced date
+    upd_erp_attributes = frappe.get_list("Item Attribute",
+                            fields=['name','woocommerce_id'],
+                            filters={
+                                    "sync_with_woocommerce": 1,
+                                    "woocommerce_id": ["!=", ""]})
+    # add new values to existing attribute
+    for attribute in upd_erp_attributes:
+        new_children = frappe.get_all("Item Attribute Value",
+                                  fields=["(attribute_value) as name", "(name) as child_id"],
+                                  filters={"woocommerce_id":"", "parent":attribute.name})
+        if new_children:
+            woo_att_id = attribute.get("woocommerce_id")
+            # if children length is longer than 100 then insert in chuncks
+            if len(new_children) > 100:
+                child_chunks = [new_children[i:i + 100] for i in range(0, len(new_children), 100)]
+                values = {}
+                for chunck in child_chunks:
+                    result = post_request(f"products/attributes/{woo_att_id}/terms/batch", {"create":chunck})
+                    values.update({i["name"]: int(i["id"]) for i in result["create"]})
+
+            # if less than 100 then insert in one go
+            elif new_children:
+                result = post_request(f"products/attributes/{woo_att_id}/terms/batch", {"create":new_children})
+                values = {i["name"]: int(i["id"]) for i in result["create"]}
+
+            for child in new_children:
+                frappe.db.set_value('Item Attribute Value', child.child_id, 'woocommerce_id', values[child.name])
+
+def sync_attributes():
+    # adds new Item Attributes with values to Wordpress
+    sync_new_attributes()
+    # add new attribute values to existing attributes
+    sync_new_attribute_values()
 
 def get_attr_values(model, attribute):
     item = DocType("Item")
@@ -543,8 +659,39 @@ def get_weight_in_woocommerce_unit(weight, weight_uom):
     if weight_unit.lower() == "kg":
         return weight * convert_to_kg[weight_uom.lower()]
 
+def sync_to_erpnext():
+    erp_cats = frappe.get_list("Item Group",
+                fields=['name', 'woocommerce_id'],
+                filters={
+                        "sync_with_woocommerce": 1,
+                        "woocommerce_id": "",
+                    },
+                )
+    if erp_cats:
+        woo_cats = {i["name"]: int(i["id"]) for i in get_woocommerce_categories()}
+        for erp_cat in erp_cats:
+            if erp_cat.name in woo_cats.keys():
+                frappe.db.set_value('Item Group', erp_cat.name, 'woocommerce_id', woo_cats[erp_cat.name])
 
-
+    woo_prods = get_woocommerce_items(True)
+    erp_products = frappe.get_list("Item",
+                fields=['woocommerce_product_id'],
+                filters={
+                        "sync_with_woocommerce": 1,
+                        "woo_sync_as_variant":1,
+                        "woocommerce_product_id": ["!=",""],
+                        "woocommerce_variant_id": ["!=",""],
+                    },
+                    group_by="woocommerce_product_id",
+                    pluck="woocommerce_product_id"
+                )
+    for woo_prod in woo_prods:
+        if str(woo_prod["id"]) in erp_products:
+            doc = frappe.new_doc('WooCommerce Product Names')
+            doc.product_name = woo_prod["name"]
+            doc.woo_id = woo_prod["id"]
+            doc.save(ignore_permissions=True)
+        
 def trigger_update_item_stock(doc, method):
     if doc:
         woocommerce_settings = frappe.get_doc("WooCommerce Config", "WooCommerce Config")
