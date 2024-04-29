@@ -467,7 +467,6 @@ def sync_new_attributes():
     # insert new attributes with their values
     for attribute in new_erp_attributes:
         woo_att = post_request("products/attributes", {"name": attribute})
-        # frappe.throw(str(woo_att.get("id")))
         children = frappe.get_all("Item Attribute Value",
                         fields=["(attribute_value) as name", "(name) as child_id"],
                         filters={"parent":attribute})
