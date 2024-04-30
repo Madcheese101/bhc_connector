@@ -3,7 +3,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, cint, get_url, get_datetime
 from frappe.query_builder import DocType
-
+from frappe.utils.background_jobs import enqueue
 import requests.exceptions, requests
 from .exceptions import woocommerceError
 from .utils import make_woocommerce_log, disable_woocommerce_sync_for_item
@@ -13,8 +13,15 @@ from .woocommerce_requests import (post_request, get_woocommerce_items,
                                    get_woocommerce_categories,
                                    get_woocommerce_media)
 
+
 @frappe.whitelist()
 def fix_issues():
+    enqueue("woocommerceconnector.sync_products.job_que", queue='long',
+             timeout=2000)
+    frappe.msgprint(_("Queued for syncing. It may take a few minutes to an hour if this is your first sync."))
+
+@frappe.whitelist()
+def job_que():
     sync_attributes()
     sync_to_erpnext()
     woo_attrs = {i["name"]: int(i["woocommerce_id"]) 
