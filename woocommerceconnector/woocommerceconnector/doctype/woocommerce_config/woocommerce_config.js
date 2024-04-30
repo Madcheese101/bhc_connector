@@ -75,16 +75,16 @@ frappe.ui.form.on("WooCommerce Config", {
             frm.toggle_reqd("sales_invoice_series", frm.doc.sync_sales_invoice);
             frm.toggle_reqd("delivery_note_series", frm.doc.sync_delivery_note);
             
-            frm.add_custom_button(__('Fix Issues'), function() {
-                frappe.call({
-                    method:"woocommerceconnector.sync_products.fix_issues",
-                    // args: {
-                    //     "path": "products/attributes"
-                    // },
-                    callback: function(r){
-                    }
-                })
-            });
+            // frm.add_custom_button(__('Fix Issues'), function() {
+            //     frappe.call({
+            //         method:"woocommerceconnector.sync_products.fix_issues",
+            //         // args: {
+            //         //     "path": "products/attributes"
+            //         // },
+            //         callback: function(r){
+            //         }
+            //     })
+            // });
 
             frm.add_custom_button(__('Sync Products'), function() {
                 frappe.call({
