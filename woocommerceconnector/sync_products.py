@@ -416,6 +416,7 @@ def sync_parent_categories():
     
     for parent in unsynced_parents:
         frappe.db.set_value('Item Group', parent.name, 'woocommerce_id', values[parent.name])
+        frappe.db.commit()
 
 def sync_child_categories():
         # get unsynced item groups
@@ -447,6 +448,7 @@ def sync_child_categories():
         
         for child in children:
             frappe.db.set_value('Item Group', child.name, 'woocommerce_id', values[child.name])
+            frappe.db.commit()
 
 def sync_categories():
     sync_parent_categories()
@@ -493,9 +495,10 @@ def sync_new_attributes():
                 values = {i["name"]: int(i["id"]) for i in result["create"]}
 
             frappe.db.set_value('Item Attribute', attribute, 'woocommerce_id', int(woo_att_id))
-
+            frappe.db.commit()
             for child in children:
                 frappe.db.set_value('Item Attribute Value', child.child_id, 'woocommerce_id', values[child.name])
+                frappe.db.commit()
 
 def sync_new_attribute_values():
     # TO-DO: filter it by last last synced date
@@ -526,6 +529,7 @@ def sync_new_attribute_values():
 
             for child in new_children:
                 frappe.db.set_value('Item Attribute Value', child.child_id, 'woocommerce_id', values[child.name])
+                frappe.db.commit()
 
 def sync_attributes():
     # adds new Item Attributes with values to Wordpress
