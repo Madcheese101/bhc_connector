@@ -54,7 +54,7 @@ def sync_woocommerce_resources(sync_prods, sync_order, sync_stock):
             frappe.db.set_value("WooCommerce Config", None, "last_sync_datetime", frappe.utils.now())
             message = ""
             if sync_prods:
-                sync_products(woocommerce_settings.price_list)
+                sync_products(woocommerce_settings)
                 message += "Updated {products} item(s)".format(**frappe.local.form_dict.count_dict)
             if sync_order:
                 sync_customers()
