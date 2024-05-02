@@ -22,9 +22,12 @@
   "webhook_address",
   "access_token",
   "erp_settings",
-  "if_not_exists_create_item_to_woocommerce",
+  "woo_has_variant_prods",
   "sync_only_published",
   "column_break_8",
+  "woocommerce_variant_settings_section",
+  "naming_attributes_list",
+  "variants_attributes_table",
   "company_dependent_settings",
   "company",
   "cash_bank_account",
@@ -155,12 +158,6 @@
    "fieldtype": "Link",
    "label": "Price List",
    "options": "Price List"
-  },
-  {
-   "default": "0",
-   "fieldname": "if_not_exists_create_item_to_woocommerce",
-   "fieldtype": "Check",
-   "label": "If item does not exist, create item in woocommerce"
   },
   {
    "fieldname": "column_break_8",
@@ -365,11 +362,39 @@
   {
    "fieldname": "column_break_oq0w7",
    "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "woo_has_variant_prods",
+   "fieldtype": "Check",
+   "label": "WooCommerce has Variable Products?"
+  },
+  {
+   "depends_on": "woo_has_variant_prods",
+   "fieldname": "woocommerce_variant_settings_section",
+   "fieldtype": "Section Break",
+   "label": "WooCommerce Variant Settings"
+  },
+  {
+   "description": "Attributes used to name the parent product in WooCommerce",
+   "fieldname": "naming_attributes_list",
+   "fieldtype": "Table",
+   "label": "Naming Attributes",
+   "mandatory_depends_on": "woo_has_variant_prods",
+   "options": "Naming Attributes"
+  },
+  {
+   "description": "Attributes used to create the variants in WooCommerce",
+   "fieldname": "variants_attributes_table",
+   "fieldtype": "Table",
+   "label": "Variants Attributes",
+   "mandatory_depends_on": "woo_has_variant_prods",
+   "options": "Variant Attributes"
   }
  ],
  "issingle": 1,
  "links": [],
- "modified": "2024-02-03 01:33:42.807849",
+ "modified": "2024-04-30 19:09:16.367699",
  "modified_by": "Administrator",
  "module": "WooCommerceConnector",
  "name": "WooCommerce Config",
