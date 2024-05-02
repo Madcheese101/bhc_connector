@@ -132,7 +132,7 @@ def get_filter_request(path, params=None):
             exception=True)
     return r.json()
 
-def post_request(path, data):
+def post_request(path, data, version="wc/v3"):
         settings = get_woocommerce_settings()
         
         wcapi = API(
@@ -141,7 +141,7 @@ def post_request(path, data):
                 consumer_secret=settings['api_secret'],
                 verify_ssl=settings['verify_ssl'],
                 wp_api=True,
-                version="wc/v3",
+                version=version,
                 timeout=1000
         )
         
