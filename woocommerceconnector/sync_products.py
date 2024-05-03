@@ -109,9 +109,7 @@ def sync_items_to_woo(woocommerce_settings):
             # else sync as simple type product
             # TO-DO: use the correct Image Insertion
             else:
-                sync_to_woo_as_simple(item, woocommerce_settings.get("price_list"),
-                                      warehouse_list, woo_prods,
-                                      woo_cats, img)
+                sync_to_woo_as_simple(item, woo_prods, woo_cats, img)
             
         except woocommerceError as e:
             make_woocommerce_log(title="{0}".format(e), 
@@ -329,8 +327,7 @@ def insert_product_variants(variants_to_insert):
                                  method="insert_product_variants", 
                                  message=f"{no_sku}")
    
-def sync_to_woo_as_simple(item, price_list, warehouse_list,
-                          woo_prods, woo_cats, img):
+def sync_to_woo_as_simple(item, woo_prods, woo_cats, img):
     if item.get("variant_of") and not item.get("woocommerce_product_id"):
         erp_item = frappe.get_doc("Item", item.get("name"))
         erp_item.flags.ignore_mandatory = True
@@ -344,7 +341,7 @@ def sync_to_woo_as_simple(item, price_list, warehouse_list,
             "sku": item.get("name"),
             "image": img
             }
-        product_data.update( get_price_and_stock_details(item, warehouse_list, price_list) )
+        product_data.update(set_price_stock(item))
 
         # insert product to woo
         woo_product = post_request("products", product_data)
