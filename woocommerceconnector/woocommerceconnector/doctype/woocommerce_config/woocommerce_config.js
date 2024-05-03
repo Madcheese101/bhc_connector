@@ -110,6 +110,14 @@ frappe.ui.form.on("WooCommerce Config", {
                     }
                 })
             }, __('Sync'));
+            frm.add_custom_button(__('Update Prices'), function() {
+                frappe.call({
+                    method:"woocommerceconnector.api.sync_woocommerce",
+                    args: {
+                        sync_price: true
+                    }
+                })
+            }, __('Sync'));
             frm.page.set_inner_btn_group_as_primary(__('Sync'));
         }
 
@@ -142,7 +150,6 @@ frappe.ui.form.on("WooCommerce Config", {
         frappe.call({
             method: "woocommerceconnector.api.get_log_image_status",
             callback: function(r) {
-                console.log(r)
                 if(r.message){
                     frm.dashboard.set_headline_alert(r.message.text, r.message.alert_class)
                 }

@@ -8,20 +8,20 @@ from frappe import _
 from .exceptions import woocommerceError
 from .sync_orders import sync_orders, close_synced_woocommerce_orders
 from .sync_customers import sync_customers
-from .sync_products import sync_products, update_item_stock_qty
+from .sync_products import sync_products, update_item_stock_qty, sync_prices
 from .utils import disable_woocommerce_sync_on_exception, make_woocommerce_log
 from frappe.utils.background_jobs import enqueue
 
 @frappe.whitelist()
 def check_hourly_sync():
-    woocommerce_settings = frappe.get_doc("WooCommerce Config")
+    woocommerce_settings = frappe.get_doc("WooCommerce Config", "WooCommerce Config")
     if woocommerce_settings.hourly_sync == 1:
-        sync_woocommerce(sync_order=True, sync_prods=False, sync_stock=False)
+        sync_woocommerce(sync_order=True)
 
 @frappe.whitelist()
-def sync_woocommerce(sync_order=False, sync_prods = False, sync_stock=False):
+def sync_woocommerce(sync_order=False, sync_prods = False, sync_stock=False, sync_price=False):
     """Enqueue longjob for syncing woocommerce"""
-    woocommerce_settings = frappe.get_doc("WooCommerce Config")
+    woocommerce_settings = frappe.get_doc("WooCommerce Config", "WooCommerce Config")
     if woocommerce_settings.sync_timeout == 0:
         woocommerce_settings.sync_timeout = 1500
         woocommerce_settings.save()
@@ -33,42 +33,79 @@ def sync_woocommerce(sync_order=False, sync_prods = False, sync_stock=False):
              timeout=timeout, 
              sync_prods=sync_prods,
              sync_order=sync_order,
-             sync_stock=sync_stock)
+             sync_stock=sync_stock,
+             sync_price=sync_price)
     frappe.msgprint(_("Queued for syncing. It may take a few minutes to an hour if this is your first sync."))
 
 @frappe.whitelist()
-def sync_woocommerce_resources(sync_prods, sync_order, sync_stock):
+def sync_woocommerce_resources(sync_prods, sync_order, sync_stock, sync_price):
     woocommerce_settings = frappe.get_doc("WooCommerce Config")
 
-    make_woocommerce_log(title="Sync Job Queued", status="Queued", method=frappe.local.form_dict.cmd, message="Sync Job Queued")
-    
     if woocommerce_settings.enable_woocommerce:
-        make_woocommerce_log(title="Sync Job Started", status="Started", method=frappe.local.form_dict.cmd, message="Sync Job Started")
         try :
             validate_woocommerce_settings(woocommerce_settings)
             frappe.local.form_dict.count_dict = {}
-            frappe.local.form_dict.count_dict["customers"] = 0
-            frappe.local.form_dict.count_dict["orders"] = 0
-            frappe.local.form_dict.count_dict["products"] = 0                
+            frappe.local.form_dict.count_dict["products"] = 0
             
-            frappe.db.set_value("WooCommerce Config", None, "last_sync_datetime", frappe.utils.now())
             message = ""
             if sync_prods:
+                make_woocommerce_log(title="Sync Products Job Started", 
+                                     status="Started", 
+                                     method=frappe.local.form_dict.cmd, 
+                                     message="Sync Products Job Started")
+
                 sync_products(woocommerce_settings)
-                message += "Updated {products} item(s)".format(**frappe.local.form_dict.count_dict)
+                message += "Updated {products} item(s)".format(
+                    **frappe.local.form_dict.count_dict)
+                make_woocommerce_log(title="Products Sync Completed", 
+                                    status="Success", 
+                                    method=frappe.local.form_dict.cmd, 
+                                    message= message)
+                frappe.db.set_value("WooCommerce Config", 
+                                None, "last_sync_datetime", frappe.utils.now())
             if sync_order:
+                frappe.local.form_dict.count_dict["customers"] = 0
+                frappe.local.form_dict.count_dict["orders"] = 0
+                make_woocommerce_log(title="Sync Orders Job Started", 
+                                     status="Started", 
+                                     method=frappe.local.form_dict.cmd, 
+                                     message="Sync Orders Job Started")
                 sync_customers()
                 sync_orders()
                 message += """ Updated {customers} customer(s), {orders} order(s)""".format(
                     **frappe.local.form_dict.count_dict)
+                make_woocommerce_log(title="Orders Sync Completed", 
+                                    status="Success", 
+                                    method=frappe.local.form_dict.cmd, 
+                                    message= message)
             if sync_stock:
+                make_woocommerce_log(title="Sync Stock Job Started", 
+                                     status="Started", 
+                                     method=frappe.local.form_dict.cmd, 
+                                     message="Sync Stock Job Started")
                 # close_synced_woocommerce_orders() # DO NOT GLOBALLY CLOSE
                 if woocommerce_settings.sync_item_qty_from_erpnext_to_woocommerce:
                     update_item_stock_qty()
-                message += " Updated {products} item(s) stock".format(**frappe.local.form_dict.count_dict)
-
-            make_woocommerce_log(title="Sync Completed", status="Success", method=frappe.local.form_dict.cmd, 
-                message= message)
+                message += " Updated {products} item(s) stock".format(
+                    **frappe.local.form_dict.count_dict)
+                make_woocommerce_log(title="Stock Sync Completed", 
+                                    status="Success", 
+                                    method=frappe.local.form_dict.cmd, 
+                                    message= message)
+            if sync_price:
+                make_woocommerce_log(title="Sync Prices Job Started", 
+                         status="Started", 
+                         method=frappe.local.form_dict.cmd, 
+                         message="Sync Prices Job Started")
+                sync_prices(woocommerce_settings)
+                message += " Updated {products} item(s) prices".format(
+                    **frappe.local.form_dict.count_dict)
+                make_woocommerce_log(title="Prices Sync Completed", 
+                                    status="Success", 
+                                    method=frappe.local.form_dict.cmd, 
+                                    message= message)
+                frappe.db.set_value("WooCommerce Config", None, 
+                                "last_price_sync", frappe.utils.now())
 
         except Exception as e:
             if e.args[0] and hasattr(e.args[0], "startswith") and e.args[0].startswith("402"):

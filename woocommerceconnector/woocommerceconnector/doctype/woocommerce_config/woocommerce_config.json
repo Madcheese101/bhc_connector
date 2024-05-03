@@ -12,6 +12,7 @@
   "app_type",
   "column_break_4",
   "last_sync_datetime",
+  "last_price_sync",
   "section_break_2",
   "woocommerce_url",
   "api_key",
@@ -104,7 +105,7 @@
   {
    "fieldname": "last_sync_datetime",
    "fieldtype": "Datetime",
-   "label": "Last Sync Datetime",
+   "label": "Last Sync",
    "read_only": 1
   },
   {
@@ -390,11 +391,17 @@
    "label": "Variants Attributes",
    "mandatory_depends_on": "woo_has_variant_prods",
    "options": "Variant Attributes"
+  },
+  {
+   "fieldname": "last_price_sync",
+   "fieldtype": "Datetime",
+   "label": "Last Price Sync",
+   "read_only": 1
   }
  ],
  "issingle": 1,
  "links": [],
- "modified": "2024-04-30 19:09:16.367699",
+ "modified": "2024-05-03 22:34:45.009708",
  "modified_by": "Administrator",
  "module": "WooCommerceConnector",
  "name": "WooCommerce Config",

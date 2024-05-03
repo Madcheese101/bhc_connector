@@ -539,6 +539,10 @@ def sync_attributes():
     # return the list of synced attributes as dict
     return result
 
+def chunck_list(list, chunck_size):
+    result = [list[i:i + chunck_size] for i in range(0, len(list), chunck_size)]
+    return result
+
 def get_attr_values(model, attribute):
     item = DocType("Item")
     item_variant = DocType("Item Variant Attribute")
@@ -779,6 +783,87 @@ def get_product_update_dict_and_resource(woocommerce_product_id, woocommerce_var
 
     return item_data, resource
 
+def get_new_prices(woocommerce_settings):
+    price_list = woocommerce_settings.get("price_list")
+
+    item_doc = frappe.qb.DocType("Item")
+    item_price_doc = frappe.qb.DocType("Item Price")
+    data_qb = (frappe.qb
+                    .from_(item_doc)
+                    .from_(item_price_doc)
+                    .select(
+                        item_doc.item_code,
+                        item_doc.woo_sync_as_variant,
+                        item_doc.woocommerce_product_id,
+                        item_doc.woocommerce_variant_id,
+                        item_price_doc.price_list_rate
+                    )
+                    .where(item_doc.disabled == 0)
+                    .where(item_doc.sync_with_woocommerce == 1)
+                    .where(item_doc.woocommerce_product_id != "")
+                    .where(item_price_doc.item_code == item_doc.name)
+                    .where(item_price_doc.price_list == price_list)
+                    .groupby(item_doc.item_code)
+                )
+    if woocommerce_settings.last_price_sync:
+        data_qb = data_qb.where(item_price_doc.modified >= woocommerce_settings.last_price_sync)
+
+    return data_qb.run(as_dict=True)
+
+@frappe.whitelist()
+def sync_prices(woocommerce_settings):
+    variants_list = {}
+    simple_products = []
+    result = {"update": []}
+    for item in get_new_prices(woocommerce_settings):
+        if item["woo_sync_as_variant"]:
+            var_data = {"id": int(item["woocommerce_variant_id"]),
+                         "regular_price": "{0}".format(flt(item.price_list_rate))}
+            parent_id = item["woocommerce_product_id"]
+            if item["woocommerce_product_id"] in variants_list.keys():
+                variants_list[parent_id].append(var_data)
+            else:
+                variants_list[parent_id] = [var_data]
+        else:
+            simple_products.append({"id": int(item["woocommerce_product_id"]),
+                         "regular_price": "{0}".format(flt(item.price_list_rate))})
+    
+    try:
+        for prod, vars in variants_list.items():
+            if len(vars) > 100:
+                chuncks = chunck_list(vars, 100)
+                for chunck in chuncks:
+                    result = post_request(f"products/{prod}/variations/batch", {"update":chunck})
+            else:
+                result = post_request(f"products/{prod}/variations/batch", {"update":vars})
+            if "update" in result.keys():
+                frappe.local.form_dict.count_dict["products"] += len(result["update"])
+
+        if len(simple_products) > 100:
+                chuncks = chunck_list(simple_products, 100)
+                for chunck in chuncks:
+                    result = post_request(f"products/{prod}/batch", {"update":chunck})
+                    if "update" in result.keys():
+                        frappe.local.form_dict.count_dict["products"] += len(result["update"])
+        elif simple_products:
+            result = post_request(f"products/{prod}/batch", {"update":simple_products})
+        
+        if "update" in result.keys():
+            frappe.local.form_dict.count_dict["products"] += len(result["update"])
+
+    except woocommerceError as e:
+        make_woocommerce_log(title="{0}".format(e), 
+                                status="Error", 
+                                method="sync_prices", 
+                                message=frappe.get_traceback(),
+            request_data=result, exception=True)
+    except Exception as e:
+        make_woocommerce_log(title="{0}".format(e), 
+                                status="Error", 
+                                method="sync_prices", 
+                                message=frappe.get_traceback(),
+            request_data=result, exception=True)
+        
 def add_w_id_to_erp():
     # purge WooCommerce IDs so that there cannot be any conflict
     purge_ids = """UPDATE `tabItem`
