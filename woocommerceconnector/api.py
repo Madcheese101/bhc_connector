@@ -40,7 +40,10 @@ def sync_woocommerce(sync_order=False, sync_prods = False, sync_stock=False, syn
 @frappe.whitelist()
 def sync_woocommerce_resources(sync_prods, sync_order, sync_stock, sync_price):
     woocommerce_settings = frappe.get_doc("WooCommerce Config")
-
+    make_woocommerce_log(title="Sync Job Queued", 
+                         status="Queued", 
+                         method=frappe.local.form_dict.cmd, 
+                         message="Sync Job Queued")
     if woocommerce_settings.enable_woocommerce:
         try :
             validate_woocommerce_settings(woocommerce_settings)
