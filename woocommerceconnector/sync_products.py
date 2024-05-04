@@ -726,11 +726,12 @@ def update_item_stock(item, woocommerce_settings, bin=None, force=False):
         _item = item
     
     item_code = _item.item_code
+    item_name = _item.item_name
     bin_since_last_sync = 0
     if _item.sync_qty_with_woocommerce:
         if not _item.woocommerce_product_id:
             make_woocommerce_log(title="WooCommerce ID missing", status="Error", method="sync_woocommerce_items",
-                message="Please sync WooCommerce IDs to ERP (missing for item {0})".format(item_code),
+                message="Please sync WooCommerce IDs to ERP (missing for item {0}: {1})".format(item_code, item_name),
                   request_data=item_code, exception=True)
         else:
             # removed bin date check
