@@ -26,139 +26,130 @@ def sync_woocommerce_customers(woocommerce_customer_list):
 def update_customer(woocommerce_customer):
     return
 
-def create_customer(woocommerce_customer, woocommerce_customer_list):
+def create_customer(order_billing, order_shipping, customer_id,woocommerce_customer_list=[]):
     import frappe.utils.nestedset
 
     woocommerce_settings = frappe.get_doc("WooCommerce Config", "WooCommerce Config")
     
-    cust_name = (woocommerce_customer.get("first_name") + " " + (woocommerce_customer.get("last_name") \
-        and  woocommerce_customer.get("last_name") or "")) if woocommerce_customer.get("first_name")\
-        else woocommerce_customer.get("email")
+    cust_name = order_billing.get("first_name") + " " + order_billing.get("last_name") 
         
     try:
         # try to match territory
-        country_name = get_country_name(woocommerce_customer["billing"]["country"])
+        country_name = get_country_name(order_billing.get("country"))
         if frappe.db.exists("Territory", country_name):
             territory = country_name
         else:
             territory = frappe.utils.nestedset.get_root_of("Territory")
+        
         customer = frappe.get_doc({
             "doctype": "Customer",
-            "name": woocommerce_customer.get("id"),
             "customer_name" : cust_name,
-            "woocommerce_customer_id": woocommerce_customer.get("id"),
+            "woocommerce_customer_id": customer_id,
             "sync_with_woocommerce": 0,
             "customer_group": woocommerce_settings.customer_group,
             "territory": territory,
+            "mobile_no": order_billing.get("phone"),
+            "email_id": order_billing.get("email"),
             "customer_type": _("Individual")
         })
         customer.flags.ignore_mandatory = True
         customer.insert()
         
         if customer:
-            create_customer_address(customer, woocommerce_customer)
-            create_customer_contact(customer, woocommerce_customer)
+            customer_shipping_address = create_customer_address("Shipping", order_shipping, customer.name)
+            customer_billing_address = create_customer_address("Billing", order_shipping, customer.name)
+            customer_contact = create_customer_contact(customer.name, order_billing)
     
-        woocommerce_customer_list.append(woocommerce_customer.get("id"))
+        woocommerce_customer_list.append(customer_id)
         frappe.db.commit()
         make_woocommerce_log(title="create customer", status="Success", method="create_customer",
-            message= "create customer",request_data=woocommerce_customer, exception=False)
-            
+            message= "create customer",request_data=order_billing, exception=False)
+        
+        return customer.name, customer_shipping_address, customer_billing_address, customer_contact
+    
     except Exception as e:
         if e.args[0] and e.args[0].startswith("402"):
             raise e
         else:
             make_woocommerce_log(title=e, status="Error", method="create_customer", message=frappe.get_traceback(),
-                request_data=woocommerce_customer, exception=True)
+                request_data=order_billing, exception=True)
+        return None, None, None
         
-def create_customer_address(customer, woocommerce_customer):
-    billing_address = woocommerce_customer.get("billing")
-    shipping_address = woocommerce_customer.get("shipping")
-    
-    if billing_address:
-        country = get_country_name(billing_address.get("country"))
-        if not frappe.db.exists("Country", country):
-            country = "Switzerland"
-        try :
-            frappe.get_doc({
+def create_customer_address(type, address_details, customer):
+    try :    
+        address_name = frappe.db.get_value(
+        "Address", 
+        {
+            "woocommerce_address_id": type,
+            "address_line1": address_details.get("address_1"),
+            "address_line2": address_details.get("address_2"),
+        }, 
+        "name")
+
+        if not address_name:
+            country = get_country_name(address_details.get("country"))
+            address_name = frappe.get_doc({
                 "doctype": "Address",
-                "woocommerce_address_id": "Billing",
-                "address_title": customer.name,
-                "address_type": "Billing",
-                "address_line1": billing_address.get("address_1") or "Address 1",
-                "address_line2": billing_address.get("address_2"),
-                "city": billing_address.get("city") or "City",
-                "state": billing_address.get("state"),
-                "pincode": billing_address.get("postcode"),
+                "woocommerce_address_id": type,
+                "address_title": customer,
+                "address_type": type,
+                "address_line1": address_details.get("address_1") or "Address 1",
+                "address_line2": address_details.get("address_2"),
+                "city": address_details.get("city") or "City",
+                "state": address_details.get("state"),
+                "pincode": address_details.get("postcode"),
                 "country": country,
-                "phone": billing_address.get("phone"),
-                "email_id": billing_address.get("email"),
+                "phone": address_details.get("phone"),
+                "email_id": address_details.get("email"),
                 "links": [{
                     "link_doctype": "Customer",
-                    "link_name": customer.name
+                    "link_name": customer
                 }]
             }).insert()
+            address_name = address_name.name
+        return address_name
+    except Exception as e:
+        make_woocommerce_log(title=e, status="Error", method="create_customer_address", message=frappe.get_traceback(),
+                request_data=address_details, exception=True)
+        return None
 
-        except Exception as e:
-            make_woocommerce_log(title=e, status="Error", method="create_customer_address", message=frappe.get_traceback(),
-                    request_data=woocommerce_customer, exception=True)
-
-    if shipping_address:
-        country = get_country_name(shipping_address.get("country"))
-        if not frappe.db.exists("Country", country):
-            country = "Switzerland"
-        try :
-            frappe.get_doc({
-                "doctype": "Address",
-                "woocommerce_address_id": "Shipping",
-                "address_title": customer.name,
-                "address_type": "Shipping",
-                "address_line1": shipping_address.get("address_1") or "Address 1",
-                "address_line2": shipping_address.get("address_2"),
-                "city": shipping_address.get("city") or "City",
-                "state": shipping_address.get("state"),
-                "pincode": shipping_address.get("postcode"),
-                "country": country,
-                "phone": shipping_address.get("phone"),
-                "email_id": shipping_address.get("email"),
-                "links": [{
-                    "link_doctype": "Customer",
-                    "link_name": customer.name
-                }]
-            }).insert()
-            
-        except Exception as e:
-            make_woocommerce_log(title=e, status="Error", method="create_customer_address", message=frappe.get_traceback(),
-                request_data=woocommerce_customer, exception=True)
-
-# TODO: email and phone into child table
-def create_customer_contact(customer, woocommerce_customer):
+def create_customer_contact(customer, order_billing):
     try :
-        frappe.get_doc({
-            "doctype": "Contact",
-            "first_name": woocommerce_customer["billing"]["first_name"],
-            "last_name": woocommerce_customer["billing"]["last_name"],
-            "email_ids": [{
-                "email_id": woocommerce_customer["billing"]["email"],
-                "is_primary": 1
-            }],
-            "phone_nos": [{
-                "phone": woocommerce_customer["billing"]["phone"],
+        customer_contact = frappe.db.get_value(
+        "Contact", 
+        {
+            "first_name": order_billing.get("first_name"),
+            "last_name": order_billing.get("last_name"),
+            "mobile_no": order_billing.get("phone")
+        }, 
+        "name")
+        if not customer_contact:
+            customer_contact = frappe.new_doc("Contact")
+            customer_contact.first_name = order_billing["first_name"]
+            customer_contact.last_name = order_billing["last_name"]
+            if order_billing["email"]:
+                customer_contact.email_ids = [{
+                    "email_id": order_billing["email"],
+                    "is_primary": 1
+                }]
+            customer_contact.phone_nos = [{
+                "phone": order_billing["phone"],
                 "is_primary_phone": 1
-            }],
-            "links": [{
-                "link_doctype": "Customer",
-                "link_name": customer.name
             }]
-        }).insert()
+            customer_contact.links = [{
+                "link_doctype": "Customer",
+                "link_name": customer
+            }]
+            customer.is_primary_contact = 1
+            customer.is_billing_contact = 1
+            customer_contact.save()
+        return customer_contact
 
     except Exception as e:
         make_woocommerce_log(title=e, status="Error", method="create_customer_contact", message=frappe.get_traceback(),
-                request_data=woocommerce_customer, exception=True)
+                request_data=order_billing, exception=True)
+        return None
 
 def get_country_name(code):
-    coutry_name = ''
-    coutry_names = """SELECT `country_name` FROM `tabCountry` WHERE `code` = '{0}'""".format(code.lower())
-    for _coutry_name in frappe.db.sql(coutry_names, as_dict=1):
-        coutry_name = _coutry_name.country_name
-    return coutry_name
+    country_name = frappe.db.get_value("Country", {"code": code.lower()}, "country_name")
+    return country_name
