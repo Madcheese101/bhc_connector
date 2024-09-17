@@ -76,32 +76,6 @@ def valid_products(woocommerce_order):
                 message="Item id is missing in WooCommerce! The Order {0} will not be imported! For details of order see below".format(woocommerce_order.get("product_id")),
                 request_data=woocommerce_order, exception=True)
             return False
-    # if customer_id > 0:
-    #     if not frappe.db.get_value("Customer", {"woocommerce_customer_id": str(customer_id)}, "name", False,True):
-    #         woocommerce_customer = get_woocommerce_customer(customer_id)
-
-    #         #Customer may not have billing and shipping address on file, pull it from the order
-    #         if woocommerce_customer["billing"].get("address_1") == "":
-    #             woocommerce_customer["billing"] = woocommerce_order["billing"]
-    #             woocommerce_customer["billing"]["country"] = get_country_from_code( woocommerce_customer.get("billing").get("country") )
-
-    #             if woocommerce_customer["shipping"].get("address_1") == "":
-    #                 woocommerce_customer["shipping"] = woocommerce_order["shipping"]
-    #                 woocommerce_customer["shipping"]["country"] = get_country_from_code( woocommerce_customer.get("shipping").get("country") )
-            
-    #         create_customer(woocommerce_customer, woocommerce_customer_list=[])
-
-    # if customer_id == 0: # we are dealing with a guest customer 
-    #     # woocommerce_settings = frappe.get_doc("WooCommerce Config", "WooCommerce Config")
-    #     # if not woocommerce_settings.default_customer:
-    #         # make_woocommerce_log(title="Missing Default Customer", status="Error", method="valid_customer_and_product", message="Missing Default Customer in WooCommerce Config",
-    #             # request_data=woocommerce_order, exception=True)
-    #         # return False
-    #     if not frappe.db.get_value("Customer", 
-    #                                {"woocommerce_customer_id": "Guest of Order-ID: {0}".format(woocommerce_order.get("id"))}, "name", False,True):
-    #         make_woocommerce_log(title="create new customer based on guest order", status="Started", method="valid_customer_and_product", message="creat new customer based on guest order",
-    #             request_data=woocommerce_order, exception=False)
-    #         create_new_customer_of_guest(woocommerce_order)
 
     return True
 
