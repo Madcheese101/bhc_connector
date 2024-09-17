@@ -142,7 +142,7 @@ def get_erp_customer_details(order_billing, order_shipping, order_customer_id):
         customer, shipping_address, billing_address, customer_contact = create_customer(order_billing,
                                                                                         order_shipping,
                                                                                         customer_id)
-        erp_customer = customer.name
+        erp_customer = customer
     return erp_customer, shipping_address, billing_address, customer_contact
 
 def create_order(woocommerce_order, woocommerce_settings, company=None):
