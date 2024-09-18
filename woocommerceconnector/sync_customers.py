@@ -88,7 +88,7 @@ def create_customer_address(type, address_details, customer):
 
         if not address_name:
             country = get_country_name(address_details.get("country"))
-            address_name = frappe.get_doc({
+            address_doc = frappe.get_doc({
                 "doctype": "Address",
                 "woocommerce_address_id": type,
                 "address_title": customer,
@@ -101,12 +101,13 @@ def create_customer_address(type, address_details, customer):
                 "country": country,
                 "phone": address_details.get("phone"),
                 "email_id": address_details.get("email"),
-                "links": [{
+            })
+            address_doc.links = []
+            address_doc.links.append({
                     "link_doctype": "Customer",
                     "link_name": customer
-                }]
-            }).insert()
-            address_name = address_name.name
+                })
+            address_name = address_doc.name
         return address_name
     except Exception as e:
         make_woocommerce_log(title=e, status="Error", method="create_customer_address", message=frappe.get_traceback(),
@@ -128,18 +129,20 @@ def create_customer_contact(customer, order_billing):
             customer_contact.first_name = order_billing["first_name"]
             customer_contact.last_name = order_billing["last_name"]
             if order_billing["email"]:
-                customer_contact.email_ids = [{
+                customer_contact.email_ids = []
+                customer_contact.email_ids.append({
                     "email_id": order_billing["email"],
                     "is_primary": 1
-                }]
+                })
             customer_contact.phone_nos = [{
                 "phone": order_billing["phone"],
                 "is_primary_phone": 1
             }]
-            customer_contact.links = [{
+            customer_contact.links = []
+            customer_contact.links.append({
                 "link_doctype": "Customer",
                 "link_name": customer
-            }]
+            })
             customer_contact.is_primary_contact = 1
             customer_contact.is_billing_contact = 1
             customer_contact.save()
