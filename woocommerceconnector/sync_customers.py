@@ -102,8 +102,7 @@ def create_customer_address(type, address_details, customer):
                 "phone": address_details.get("phone"),
                 "email_id": address_details.get("email"),
             })
-            address_doc.links = []
-            address_doc.links.append({
+            address_doc.append("links", {
                     "link_doctype": "Customer",
                     "link_name": customer
                 })
@@ -129,17 +128,15 @@ def create_customer_contact(customer, order_billing):
             customer_contact.first_name = order_billing["first_name"]
             customer_contact.last_name = order_billing["last_name"]
             if order_billing["email"]:
-                customer_contact.email_ids = []
-                customer_contact.email_ids.append({
+                customer_contact.append("email_ids",{
                     "email_id": order_billing["email"],
                     "is_primary": 1
                 })
-            customer_contact.phone_nos = [{
+            customer_contact.append("phone_nos",{
                 "phone": order_billing["phone"],
                 "is_primary_phone": 1
-            }]
-            customer_contact.links = []
-            customer_contact.links.append({
+            }) 
+            customer_contact.append("links",{
                 "link_doctype": "Customer",
                 "link_name": customer
             })
