@@ -140,8 +140,8 @@ def create_customer_contact(customer, order_billing):
                 "link_doctype": "Customer",
                 "link_name": customer
             }]
-            customer.is_primary_contact = 1
-            customer.is_billing_contact = 1
+            customer_contact.is_primary_contact = 1
+            customer_contact.is_billing_contact = 1
             customer_contact.save()
         return customer_contact
 
