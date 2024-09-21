@@ -43,9 +43,7 @@ def sync_woocommerce_orders():
                         else:
                             make_woocommerce_log(title=e.message, status="Error", method="sync_woocommerce_orders", message=frappe.get_traceback(),
                                 request_data=woocommerce_order, exception=True)
-            # close this order as synced
-            close_synced_woocommerce_order(woocommerce_order.get("id"))
-                
+
 def get_woocommerce_order_status_for_import():
     status_list = []
     _status_list = frappe.db.sql("""SELECT `status` FROM `tabWooCommerce SO Status`""", as_dict=True)
