@@ -105,7 +105,10 @@ after_install = "woocommerceconnector.after_install.create_weight_uom"
 
 doc_events = {
 	"Sales Invoice": {
-		"on_submit": "woocommerceconnector.sync_products.trigger_update_item_stock",
+		"on_submit": [
+            "woocommerceconnector.sync_products.trigger_update_item_stock", 
+            "woocommerceconnector.sync_orders.mark_wc_order_completed"
+        ],
 		"on_cancel": "woocommerceconnector.sync_products.trigger_update_item_stock",
 	},
     "Purchase Receipt": {

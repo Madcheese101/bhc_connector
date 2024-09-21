@@ -368,13 +368,15 @@ def close_synced_woocommerce_orders():
                 make_woocommerce_log(title=e, status="Error", method="close_synced_woocommerce_orders", message=frappe.get_traceback(),
                     request_data=woocommerce_order, exception=True)
 
-def close_synced_woocommerce_order(wooid):
-    order_data = {
-        "status": "completed"
-    }
-    try:
-        put_request("orders/{0}".format(wooid), order_data)
-            
-    except requests.exceptions.HTTPError as e:
-        make_woocommerce_log(title=e.message, status="Error", method="close_synced_woocommerce_order", message=frappe.get_traceback(),
-            request_data=wooid, exception=True)
+def mark_wc_order_completed(doc, method):
+    wc_order_id = doc.woocommerce_order_id
+    if wc_order_id not in ["", None]:
+        order_data = {
+            "status": "completed"
+        }
+        try:
+            put_request("orders/{0}".format(wc_order_id), order_data)
+                
+        except requests.exceptions.HTTPError as e:
+            make_woocommerce_log(title=e.message, status="Error", method="close_synced_woocommerce_order", message=frappe.get_traceback(),
+                request_data=wc_order_id, exception=True)
