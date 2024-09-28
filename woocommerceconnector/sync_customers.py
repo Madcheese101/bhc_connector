@@ -142,6 +142,7 @@ def create_customer_contact(customer, order_billing):
             })
             customer_contact.is_primary_contact = 1
             customer_contact.is_billing_contact = 1
+            customer_contact.mobile_no = order_billing.get("phone")
             customer_contact.save()
         return customer_contact
 
