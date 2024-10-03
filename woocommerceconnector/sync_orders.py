@@ -26,23 +26,24 @@ def sync_woocommerce_orders():
         woocommerce_order_status_for_import = ['processing']
 
     for woocommerce_order_status in woocommerce_order_status_for_import:
-        for woocommerce_order in get_woocommerce_orders(woocommerce_order_status):
+        wc_orders_list = get_woocommerce_orders(woocommerce_order_status)
+        for wc_order in wc_orders_list:
 
-            if woocommerce_order.get("id") not in synced_orders:
-                if valid_products(woocommerce_order):
+            if str(wc_order.get("id")) not in synced_orders:
+                if valid_products(wc_order):
                     try:
-                        create_order(woocommerce_order, woocommerce_settings)
+                        create_order(wc_order, woocommerce_settings)
                         frappe.local.form_dict.count_dict["orders"] += 1
 
                     except woocommerceError as e:
                         make_woocommerce_log(status="Error", method="sync_woocommerce_orders", message=frappe.get_traceback(),
-                            request_data=woocommerce_order, exception=True)
+                            request_data=wc_order, exception=True)
                     except Exception as e:
                         if e.args and e.args[0] and e.args[0].decode("utf-8").startswith("402"):
                             raise e
                         else:
                             make_woocommerce_log(title=e.message, status="Error", method="sync_woocommerce_orders", message=frappe.get_traceback(),
-                                request_data=woocommerce_order, exception=True)
+                                request_data=wc_order, exception=True)
 
 def get_woocommerce_order_status_for_import():
     status_list = []
@@ -51,12 +52,12 @@ def get_woocommerce_order_status_for_import():
         status_list.append(status.status)
     return status_list
 
-def valid_products(woocommerce_order):
-    if woocommerce_order.get("status").lower() == "cancelled":
+def valid_products(wc_order):
+    if wc_order.get("status").lower() == "cancelled":
         return False
     warehouse = frappe.get_doc("WooCommerce Config", "WooCommerce Config").warehouse
     
-    for item in woocommerce_order.get("line_items"):
+    for item in wc_order.get("line_items"):
         if item.get("product_id"):
             erp_item = frappe.db.get_value("Item",
                         {"woocommerce_product_id": item.get("product_id"),
@@ -65,14 +66,14 @@ def valid_products(woocommerce_order):
             if not erp_item:
                 make_woocommerce_log(title="Item missing in ERPNext!", 
                     status="Error", method="valid_customer_and_product", 
-                    message="Item with id {0} is missing in ERPNext! The Order {1} will not be imported! For details of order see below".format(item.get("product_id"), woocommerce_order.get("id")),
-                    request_data=woocommerce_order, exception=True)
+                    message="Item with id {0} is missing in ERPNext! The Order {1} will not be imported! For details of order see below".format(item.get("product_id"), wc_order.get("id")),
+                    request_data=wc_order, exception=True)
                 return False
         else:
             make_woocommerce_log(title="Item id missing in WooCommerce!", 
                 status="Error", method="valid_customer_and_product", 
-                message="Item id is missing in WooCommerce! The Order {0} will not be imported! For details of order see below".format(woocommerce_order.get("product_id")),
-                request_data=woocommerce_order, exception=True)
+                message="Item id is missing in WooCommerce! The Order {0} will not be imported! For details of order see below".format(wc_order.get("product_id")),
+                request_data=wc_order, exception=True)
             return False
 
     return True
@@ -117,20 +118,20 @@ def get_erp_customer_details(order_billing, order_shipping, order_customer_id):
         erp_customer = customer
     return erp_customer, shipping_address, billing_address, customer_contact
 
-def create_order(woocommerce_order, woocommerce_settings, company=None):
-    so = create_sales_order(woocommerce_order, woocommerce_settings, company)
+def create_order(wc_order, woocommerce_settings, company=None):
+    so = create_sales_order(wc_order, woocommerce_settings, company)
     # check if sales invoice should be created
     if cint(woocommerce_settings.sync_sales_invoice) == 1:
-        create_sales_invoice(woocommerce_order, woocommerce_settings, so)
+        create_sales_invoice(wc_order, woocommerce_settings, so)
 
     #Fix this -- add shipping stuff
-    #if woocommerce_order.get("fulfillments") and cint(woocommerce_settings.sync_delivery_note):
-        #create_delivery_note(woocommerce_order, woocommerce_settings, so)
+    #if wc_order.get("fulfillments") and cint(woocommerce_settings.sync_delivery_note):
+        #create_delivery_note(wc_order, woocommerce_settings, so)
 
-def create_sales_order(woocommerce_order, woocommerce_settings, company=None):
-    id = str(woocommerce_order.get("customer_id"))
-    customer, shipping, billing, customer_contact = get_erp_customer_details(woocommerce_order.get("billing"), 
-                                                                            woocommerce_order.get("shipping"), id)
+def create_sales_order(wc_order, woocommerce_settings, company=None):
+    id = str(wc_order.get("customer_id"))
+    customer, shipping, billing, customer_contact = get_erp_customer_details(wc_order.get("billing"), 
+                                                                            wc_order.get("shipping"), id)
     if customer:
         customer_name = customer
     else:
@@ -139,7 +140,7 @@ def create_sales_order(woocommerce_order, woocommerce_settings, company=None):
     # get applicable tax rule from configuration
     tax_rules = frappe.get_all(
         "WooCommerce Tax Rule", 
-        filters={'currency': woocommerce_order.get("currency")}, 
+        filters={'currency': wc_order.get("currency")}, 
         fields=['tax_rule'])
     if not tax_rules:
         # fallback: currency has no tax rule, try catch-all
@@ -152,21 +153,21 @@ def create_sales_order(woocommerce_order, woocommerce_settings, company=None):
     so = frappe.new_doc('Sales Order')
     so.naming_series = woocommerce_settings.sales_order_series or "SO-woocommerce-"
     so.order_type = "Sales"
-    so.woocommerce_order_id = woocommerce_order.get("id"),
-    so.woocommerce_payment_method = woocommerce_order.get("payment_method_title"),
+    so.woocommerce_order_id = wc_order.get("id"),
+    so.woocommerce_payment_method = wc_order.get("payment_method_title"),
     so.customer = customer_name,
     so.customer_group = woocommerce_settings.customer_group,  # hard code group, as this was missing since v12
     so.delivery_date = nowdate(),
     so.selling_price_list = woocommerce_settings.price_list,
     # so.ignore_pricing_rule = 1,
     so.company = woocommerce_settings.company,
-    so.currency = woocommerce_order.get("currency"),
+    so.currency = wc_order.get("currency"),
     so.customer_address = billing,
     so.shipping_address_name = shipping,
-    so.posting_date = woocommerce_order.get("date_created")[:10]
+    so.posting_date = wc_order.get("date_created")[:10]
     so.set_warehouse = woocommerce_settings.warehouse
     total = 0
-    for woocommerce_item in woocommerce_order.get("line_items"):
+    for woocommerce_item in wc_order.get("line_items"):
         # item_code = get_item_code(woocommerce_item)
         item_code = woocommerce_item.get("sku")
         so.append("items",{
@@ -186,9 +187,9 @@ def create_sales_order(woocommerce_order, woocommerce_settings, company=None):
     # alle orders in ERP = submitted
     so.save(ignore_permissions=True)
     so.submit()
-    #if woocommerce_order.get("status") == "on-hold":
+    #if wc_order.get("status") == "on-hold":
     #    so.save(ignore_permissions=True)
-    #elif woocommerce_order.get("status") in ("cancelled", "refunded", "failed"):
+    #elif wc_order.get("status") in ("cancelled", "refunded", "failed"):
     #    so.save(ignore_permissions=True)
     #    so.submit()
     #    so.cancel()
@@ -198,14 +199,14 @@ def create_sales_order(woocommerce_order, woocommerce_settings, company=None):
 
     frappe.db.commit()
     make_woocommerce_log(title="create sales order", status="Success", method="create_sales_order",
-            message= "create sales_order",request_data=woocommerce_order, exception=False)
+            message= "create sales_order",request_data=wc_order, exception=False)
     return so
 
-def create_sales_invoice(woocommerce_order, woocommerce_settings, so):
-    if not frappe.db.get_value("Sales Invoice", {"woocommerce_order_id": woocommerce_order.get("id")}, "name")\
+def create_sales_invoice(wc_order, woocommerce_settings, so):
+    if not frappe.db.get_value("Sales Invoice", {"woocommerce_order_id": wc_order.get("id")}, "name")\
         and so.docstatus==1 and not so.per_billed:
         si = make_sales_invoice(so.name)
-        si.woocommerce_order_id = woocommerce_order.get("id")
+        si.woocommerce_order_id = wc_order.get("id")
         si.naming_series = woocommerce_settings.sales_invoice_series or "SI-woocommerce-"
         si.flags.ignore_mandatory = True
         set_cost_center(si.items, woocommerce_settings.cost_center)
@@ -226,8 +227,8 @@ def make_payment_entry_against_sales_invoice(doc, woocommerce_settings):
     payment_entry.reference_date = nowdate()
     payment_entry.submit()
 
-def create_delivery_note(woocommerce_order, woocommerce_settings, so):
-    for fulfillment in woocommerce_order.get("fulfillments"):
+def create_delivery_note(wc_order, woocommerce_settings, so):
+    for fulfillment in wc_order.get("fulfillments"):
         if not frappe.db.get_value("Delivery Note", {"woocommerce_fulfillment_id": fulfillment.get("id")}, "name")\
             and so.docstatus==1:
             dn = make_delivery_note(so.name)
@@ -273,9 +274,9 @@ def get_item_code(woocommerce_item):
 
     return item_code
 
-def get_order_taxes(woocommerce_order, woocommerce_settings):
+def get_order_taxes(wc_order, woocommerce_settings):
     taxes = []
-    for tax in woocommerce_order.get("tax_lines"):
+    for tax in wc_order.get("tax_lines"):
         
         woocommerce_tax = get_woocommerce_tax(tax.get("rate_id"))
         rate = woocommerce_tax.get("rate")
@@ -292,16 +293,16 @@ def get_order_taxes(woocommerce_order, woocommerce_settings):
         })
     # old code with conditional brutto/netto prices
     # taxes.append({
-        #     "charge_type": "On Net Total" if woocommerce_order.get("prices_include_tax") else "Actual",
+        #     "charge_type": "On Net Total" if wc_order.get("prices_include_tax") else "Actual",
         #     "account_head": get_tax_account_head(woocommerce_tax),
         #     "description": "{0} - {1}%".format(name, rate),
         #     "rate": rate,
         #     "tax_amount": flt(tax.get("tax_total") or 0) + flt(tax.get("shipping_tax_total") or 0), 
-        #     "included_in_print_rate": 1 if woocommerce_order.get("prices_include_tax") else 0,
+        #     "included_in_print_rate": 1 if wc_order.get("prices_include_tax") else 0,
         #     "cost_center": woocommerce_settings.cost_center
         # })
-    taxes = update_taxes_with_fee_lines(taxes, woocommerce_order.get("fee_lines"), woocommerce_settings)
-    taxes = update_taxes_with_shipping_lines(taxes, woocommerce_order.get("shipping_lines"), woocommerce_settings)
+    taxes = update_taxes_with_fee_lines(taxes, wc_order.get("fee_lines"), woocommerce_settings)
+    taxes = update_taxes_with_shipping_lines(taxes, wc_order.get("shipping_lines"), woocommerce_settings)
 
     return taxes
 
@@ -356,17 +357,17 @@ def get_tax_account_head(tax):
     return tax_account
 
 def close_synced_woocommerce_orders():
-    for woocommerce_order in get_woocommerce_orders():
-        if woocommerce_order.get("status").lower() != "cancelled":
+    for wc_order in get_woocommerce_orders():
+        if wc_order.get("status").lower() != "cancelled":
             order_data = {
                 "status": "completed"
             }
             try:
-                put_request("orders/{0}".format(woocommerce_order.get("id")), order_data)
+                put_request("orders/{0}".format(wc_order.get("id")), order_data)
                     
             except requests.exceptions.HTTPError as e:
                 make_woocommerce_log(title=e, status="Error", method="close_synced_woocommerce_orders", message=frappe.get_traceback(),
-                    request_data=woocommerce_order, exception=True)
+                    request_data=wc_order, exception=True)
 
 def mark_wc_order_completed(doc, method):
     wc_order_id = doc.woocommerce_order_id
