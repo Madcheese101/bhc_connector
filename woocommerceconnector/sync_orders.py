@@ -21,9 +21,6 @@ def sync_woocommerce_orders():
     synced_orders = frappe.get_list("Sales Order", 
                                     filters={"woocommerce_order_id": ["not in", [None,""]]},
                                     pluck="woocommerce_order_id")
-    
-    if not len(woocommerce_order_status_for_import) > 0:
-        woocommerce_order_status_for_import = ['processing']
 
     for woocommerce_order_status in woocommerce_order_status_for_import:
         wc_orders_list = get_woocommerce_orders(woocommerce_order_status)
@@ -46,10 +43,9 @@ def sync_woocommerce_orders():
                                 request_data=wc_order, exception=True)
 
 def get_woocommerce_order_status_for_import():
-    status_list = []
-    _status_list = frappe.db.sql("""SELECT `status` FROM `tabWooCommerce SO Status`""", as_dict=True)
-    for status in _status_list:
-        status_list.append(status.status)
+    status_list = frappe.get_all("WooCommerce SO Status", pluck="status")
+    if not status_list:
+        status_list = ["processing"]
     return status_list
 
 def valid_products(wc_order):
