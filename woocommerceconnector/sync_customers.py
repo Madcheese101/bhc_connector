@@ -106,6 +106,11 @@ def create_customer_address(type, address_details, customer):
                     "link_doctype": "Customer",
                     "link_name": customer
                 })
+            if type == "Billing":
+                address_doc.is_primary_address = 1
+            else:
+                address_doc.is_shipping_address = 1
+            address_doc.save()
             address_name = address_doc.name
         return address_name
     except Exception as e:
